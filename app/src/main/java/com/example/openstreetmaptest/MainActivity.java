@@ -24,6 +24,7 @@ import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider;
 import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay;
 
 
+//blala
 
 public class MainActivity extends /*Activity*/AppCompatActivity implements View.OnTouchListener{
     MapView map = null;
