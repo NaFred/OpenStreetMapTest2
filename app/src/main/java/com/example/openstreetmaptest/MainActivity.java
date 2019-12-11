@@ -25,10 +25,10 @@ import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay;
 
 
 
-public class MainActivity extends /*Activity*/AppCompatActivity implements View.OnTouchListener{
+public class MainActivity extends /*Activity*/AppCompatActivity{
     MapView map = null;
-    MapEventsReceiver receiver;
-    Context context;
+    //MapEventsReceiver receiver;
+    //Context context;
 
     MapController mapController;
     GeoPoint hochschule = new GeoPoint(49.867141, 8.638066);
@@ -76,7 +76,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity implements View.
         //on single tab auf map events overlay und events weiterreichen
 
 
-        map.setOnTouchListener(this);
+        //map.setOnTouchListener(this);
     }
 
     public void onResume(){
@@ -143,7 +143,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity implements View.
     }
     */
 
-
+ /*
     private class myMapReceiver implements MapEventsReceiver{
        @Override
         public boolean singleTapConfirmedHelper(GeoPoint p) {
@@ -154,5 +154,5 @@ public class MainActivity extends /*Activity*/AppCompatActivity implements View.
         public boolean longPressHelper(GeoPoint p) {
             return false;
         }
-    }
+    }*/
 }
