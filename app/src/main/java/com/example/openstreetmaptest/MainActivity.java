@@ -56,7 +56,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity implements View.
         //setContentView(R.layout.activity_main);
         setContentView(R.layout.main);
 
-        map = (MapView) findViewById(R.id.map);
+        map = findViewById(R.id.map);
         map.setTileSource(TileSourceFactory.MAPNIK);
 
         //default view Point
@@ -113,6 +113,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity implements View.
 //map events receiver single tab true->event nicht weiter
     //alle aktionen
 
+    /*
     public boolean onTouch(View v,MotionEvent ev) {
         switch (v.getId()){
             case R.id.map:
@@ -127,22 +128,31 @@ public class MainActivity extends /*Activity*/AppCompatActivity implements View.
         }
         return true;
     }
+*/
+    /* Test zu on SingleTapConfirmed
+    @Override public boolean onSingleTapConfirmed(final MotionEvent event, final MapView mapView){
+        boolean touched = hitTest(event, mapView);
+        if (touched){
+            if (mOnMarkerClickListener == null){
+                return onMarkerClickDefault(this, mapView);
+            } else {
+                return mOnMarkerClickListener.onMarkerClick(this, mapView);
+            }
+        } else
+            return touched;
+    }
+    */
 
 
     private class myMapReceiver implements MapEventsReceiver{
-
-
-        @Override
+       @Override
         public boolean singleTapConfirmedHelper(GeoPoint p) {
             return false;
         }
 
-        @Override
+       @Override
         public boolean longPressHelper(GeoPoint p) {
             return false;
         }
     }
-
-
-    //aösfddsofujöadslgjadslfjlsdajflsdfjadsljfsaldfjaslöfkjadslöfasdlfjsdlkfew
 }
