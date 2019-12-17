@@ -21,7 +21,9 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
 
-
+import com.google.android.gms.maps.model.CircleOptions;
+import com.google.android.gms.maps.model.JointType;
+import com.google.android.gms.maps.model.LatLng;
 
 import org.osmdroid.api.IGeoPoint;
 import org.osmdroid.api.IMapController;
@@ -47,26 +49,23 @@ import java.util.ArrayList;
 import java.util.List;
 
 
-
-
+/**
+ *
+ */
 public class MainActivity extends /*Activity*/AppCompatActivity {
+    //Create Map
     MapView map = null;
     //MapEventsReceiver receiver;
     //Context context;
 
-    //your items
+    //your items for polygon
     List<GeoPoint> geoPoints = new ArrayList<>();
-    //add your points here
-    //GeoPoint one = new GeoPoint(49.7,6.0);
-    //GeoPoint two = new GeoPoint(49.867141,8.7);
-    //GeoPoint three = new GeoPoint(49.8,8.78);
-
-
-
+    List<GeoPoint> points = new ArrayList<>();
 
     MapController mapController;
+
     GeoPoint hochschule = new GeoPoint(49.867141, 8.638066);
-    private MyLocationNewOverlay mLocationOverlay;
+    //private MyLocationNewOverlay mLocationOverlay;
     private LocationManager locManager;
     private LocationListener locListener;
 
@@ -88,13 +87,8 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         //see also StorageUtils
         //note, the load method also sets the HTTP User Agent to your application's package name, abusing osm's tile servers will get you banned based on this string
 
+        //init LocationManager with Service Location
         locManager = (LocationManager) getSystemService(LOCATION_SERVICE);
-
-
-//map listener
-        //map events overlay
-        //on single tab auf map events overlay und events weiterreichen
-
 
         //inflate and create the map
         //setContentView(R.layout.activity_main);
@@ -116,10 +110,14 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         mapController.setCenter(hochschule);
         addMarker(hochschule);
 
+        //LocationListener erstellen
         locListener = new LocationListener() {
             @Override
+            //when location changed (gps)
             public void onLocationChanged(Location location) {
+                //Create GeoPoint
                 GeoPoint geoPoint = new GeoPoint(location.getLatitude(),location.getLongitude());
+                //Add GeoPoint on Map
                 addMarker(geoPoint);
             }
 
@@ -134,14 +132,18 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
             }
 
             @Override
+            //when gps is not enabled
             public void onProviderDisabled(String provider) {
+                //Go to Setting for GPS enable
                 Intent i = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+                //Start GPS
                 startActivity(i);
             }
         };
 
-
+        //generate Polygon
         Polygon polygon = makeCircle(hochschule,1,map);
+        polygon.setStrokeWidth((float)5.0);
 
         map.getOverlays().clear();
         getGPS();
@@ -149,9 +151,6 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         map.getOverlays().add(polygon);
         addMarker(hochschule);
         map.invalidate();
-
-
-
 
         //map.setOnTouchListener(this);
 
@@ -170,8 +169,11 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
 
     private void getGPS(){
         //check permissions
+        //When permission not granted
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            //when API >23
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                //request permissions with code 10
                 requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION,Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.INTERNET}
                         ,10);
             }
@@ -182,39 +184,45 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     }
 
 
+    /*
+    public OsmCircle(CircleOptions circleOptions, MapView osmMap) {
+        this.map = osmMap;
+        Polygon osmCircle = new Polygon();
 
+
+        osmCircle.setStrokeWidth(circleOptions.getStrokeWidth());
+        osmCircle.setFillColor(circleOptions.getFillColor());
+        osmCircle.setStrokeColor(circleOptions.getStrokeColor());
+
+
+        final double radius = circleOptions.getRadius();
+        this.setR = circleOptions.getCenter();
+        osmCircle.setRadius((float) radius);
+        map.getOverlays().add(osmCircle);
+    }
+    public void setRadius(float radius) {
+        int nrOfPoints = 360;
+        ArrayList<GeoPoint> circlePoints = new ArrayList<GeoPoint>();
+        for (float f = 0; f < nrOfPoints; f ++){
+            circlePoints.add(new GeoPoint(centre.latitude , centre.longitude ).destinationPoint(radius, f));
+        }
+        osmCircle.setPoints(circlePoints);
+    }
+*/
     private Polygon makeCircle(GeoPoint geoPoint, double radius, MapView map){
         //reset geopints for circle
         geoPoints.clear();
 
-        double radius2 =radius *0.002;
-        double xplus= (geoPoint.getLatitude()+radius2);
-        double xminus= (geoPoint.getLatitude()-radius2);
-        double yplus = (geoPoint.getLongitude()+radius2);
-        double yplusdouble = (geoPoint.getLongitude()+(2*radius2));
-        double yminus = (geoPoint.getLongitude()-radius2);
-        double yminusdouble = (geoPoint.getLongitude()-(2*radius2));
-        double test = geoPoint.getLatitude();
-
-
-        GeoPoint one = new GeoPoint(xplus,yminus);
-        GeoPoint two = new GeoPoint(xplus,yplus);
-        GeoPoint three = new GeoPoint(test,yplusdouble);
-        GeoPoint four = new GeoPoint(xminus,yplus);
-        GeoPoint five = new GeoPoint(xminus,yminus);
-        GeoPoint six = new GeoPoint(test,yminusdouble);
-
-        geoPoints.add(one);
-        geoPoints.add(two);
-        geoPoints.add(three);
-        geoPoints.add(four);
-        geoPoints.add(five);
-        geoPoints.add(six);
+        for(int i=0;i<360;i++){
+            GeoPoint g = new GeoPoint(geoPoint.getLatitude(),geoPoint.getLongitude()).destinationPoint(radius,i);   //destination Point wegen der skalierung von Lat/long
+            geoPoints.add(g);
+        }
         Polygon polygon = new Polygon(map);
-        polygon.setFillColor(Color.argb(75, 255,0,0));
+
+        polygon.setFillColor(Color.argb(50, 255,0,0));
         geoPoints.add(geoPoints.get(0));    //forces the loop to close
         polygon.setPoints(geoPoints);
-        //polygon.setTitle("A sample polygon");
+        polygon.setTitle("AnkerArea");
 
         return polygon;
     }
