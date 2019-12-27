@@ -13,6 +13,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
+import android.util.DisplayMetrics;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -35,13 +36,18 @@ import org.osmdroid.config.Configuration;
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
 import org.osmdroid.util.GeoPoint;
 import org.osmdroid.views.MapView;
+import org.osmdroid.views.overlay.Overlay;
 import org.osmdroid.views.overlay.OverlayItem;
 
 
 import org.osmdroid.views.overlay.OverlayManager;
 import org.osmdroid.views.overlay.Polygon;
 import org.osmdroid.views.overlay.Polyline;
+import org.osmdroid.views.overlay.ScaleBarOverlay;
+import org.osmdroid.views.overlay.compass.CompassOverlay;
 import org.osmdroid.views.overlay.compass.InternalCompassOrientationProvider;
+import org.osmdroid.views.overlay.gestures.RotationGestureDetector;
+import org.osmdroid.views.overlay.gestures.RotationGestureOverlay;
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider;
 import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay;
 
@@ -68,8 +74,10 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     //private MyLocationNewOverlay mLocationOverlay;
     private LocationManager locManager;
     private LocationListener locListener;
-
-
+    private CompassOverlay mCompassOverlay;
+    private MyLocationNewOverlay mLocationOverlay;
+    private RotationGestureOverlay mRotationGestureOverlay;
+    private ScaleBarOverlay mScaleBarOverlay;
 
 
     @Override
@@ -97,6 +105,11 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         map = findViewById(R.id.map);
         map.setTileSource(TileSourceFactory.MAPNIK);
 
+
+        map.setTilesScaledToDpi(true);
+
+
+
         //default view Point
         IMapController mapController = map.getController();
         mapController.setZoom(18.0);
@@ -105,6 +118,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         map.setBuiltInZoomControls(true);
         //Zoom with multi fingers
         map.setMultiTouchControls(true);
+
 
 
         mapController.setCenter(hochschule);
@@ -116,7 +130,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
             //when location changed (gps)
             public void onLocationChanged(Location location) {
                 //Create GeoPoint
-                GeoPoint geoPoint = new GeoPoint(location.getLatitude(),location.getLongitude());
+                GeoPoint geoPoint = new GeoPoint(location.getLatitude(), location.getLongitude());
                 //Add GeoPoint on Map
                 addMarker(geoPoint);
             }
@@ -141,24 +155,57 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
             }
         };
 
+        //Location
+        this.mLocationOverlay = new MyLocationNewOverlay(new GpsMyLocationProvider(ctx),map);
+        this.mLocationOverlay.enableMyLocation();
+        //Compass
+        //this.mCompassOverlay = new CompassOverlay(ctx, new InternalCompassOrientationProvider(this), map);
+        this.mCompassOverlay = new CompassOverlay(getApplicationContext(), new InternalCompassOrientationProvider(getApplicationContext()), map);
+        this.mCompassOverlay.enableCompass();
+        //Rotation
+        mRotationGestureOverlay = new RotationGestureOverlay(map);
+        mRotationGestureOverlay.setEnabled(true);
+
+        final DisplayMetrics dm = ctx.getResources().getDisplayMetrics();
+        mScaleBarOverlay = new ScaleBarOverlay(map);
+        mScaleBarOverlay.setCentred(true);
+        mScaleBarOverlay.setScaleBarOffset(dm.widthPixels / 2, 10);
+
+
+
         //generate Polygon
-        Polygon polygon = makeCircle(hochschule,1,map);
-        polygon.setStrokeWidth((float)5.0);
+        Polygon polygon = makeCircle(hochschule, 20, map);
+        polygon.setStrokeWidth((float) 5.0);
+
+
 
         map.getOverlays().clear();
         getGPS();
 
+        //add polygon Overlay
         map.getOverlays().add(polygon);
+        //Rotation
+        map.getOverlays().add(this.mRotationGestureOverlay);
+        //add Compass Overlay
+        map.getOverlays().add(this.mCompassOverlay);
+        //Location
+        map.getOverlays().add(this.mLocationOverlay);
+        //Scalebar
+        map.getOverlays().add(this.mScaleBarOverlay);
+
+
+
         addMarker(hochschule);
         map.invalidate();
 
-        //map.setOnTouchListener(this);
+    }
 
-    };
+    ;
+
     //Check permission results
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        switch (requestCode){
+        switch (requestCode) {
             case 10:
                 getGPS();
                 break;
@@ -167,15 +214,16 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         }
     }
 
-    private void getGPS(){
+    private void getGPS() {
         //check permissions
         //When permission not granted
+        //TODO permission internet check
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             //when API >23
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 //request permissions with code 10
-                requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION,Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.INTERNET}
-                        ,10);
+                requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.INTERNET}
+                        , 10);
             }
             return;
         }
@@ -183,43 +231,17 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         locManager.requestLocationUpdates("gps", 5000, 0, locListener);
     }
 
-
-    /*
-    public OsmCircle(CircleOptions circleOptions, MapView osmMap) {
-        this.map = osmMap;
-        Polygon osmCircle = new Polygon();
-
-
-        osmCircle.setStrokeWidth(circleOptions.getStrokeWidth());
-        osmCircle.setFillColor(circleOptions.getFillColor());
-        osmCircle.setStrokeColor(circleOptions.getStrokeColor());
-
-
-        final double radius = circleOptions.getRadius();
-        this.setR = circleOptions.getCenter();
-        osmCircle.setRadius((float) radius);
-        map.getOverlays().add(osmCircle);
-    }
-    public void setRadius(float radius) {
-        int nrOfPoints = 360;
-        ArrayList<GeoPoint> circlePoints = new ArrayList<GeoPoint>();
-        for (float f = 0; f < nrOfPoints; f ++){
-            circlePoints.add(new GeoPoint(centre.latitude , centre.longitude ).destinationPoint(radius, f));
-        }
-        osmCircle.setPoints(circlePoints);
-    }
-*/
-    private Polygon makeCircle(GeoPoint geoPoint, double radius, MapView map){
+    private Polygon makeCircle(GeoPoint geoPoint, double radius, MapView map) {
         //reset geopints for circle
         geoPoints.clear();
 
-        for(int i=0;i<360;i++){
-            GeoPoint g = new GeoPoint(geoPoint.getLatitude(),geoPoint.getLongitude()).destinationPoint(radius,i);   //destination Point wegen der skalierung von Lat/long
+        for (int i = 0; i < 360; i++) {
+            GeoPoint g = new GeoPoint(geoPoint.getLatitude(), geoPoint.getLongitude()).destinationPoint(radius, i);   //destination Point wegen der skalierung von Lat/long
             geoPoints.add(g);
         }
         Polygon polygon = new Polygon(map);
 
-        polygon.setFillColor(Color.argb(50, 255,0,0));
+        polygon.setFillColor(Color.argb(50, 255, 0, 0));
         geoPoints.add(geoPoints.get(0));    //forces the loop to close
         polygon.setPoints(geoPoints);
         polygon.setTitle("AnkerArea");
@@ -228,8 +250,10 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     }
 
 
-    public void onResume(){
+    public void onResume() {
         super.onResume();
+
+
         //this will refresh the osmdroid configuration on resuming.
         //if you make changes to the configuration, use
         //SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
@@ -237,7 +261,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         map.onResume(); //needed for compass, my location overlays, v6.0.0 and up
     }
 
-    public void onPause(){
+    public void onPause() {
         super.onPause();
         //this will refresh the osmdroid configuration on resuming.
         //if you make changes to the configuration, use
@@ -247,61 +271,17 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     }
 
 
-    public void addMarker(GeoPoint center){
+
+
+
+    public void addMarker(GeoPoint center) {
         Marker marker = new Marker(map);
         marker.setPosition(center);
-        marker.setAnchor(Marker.ANCHOR_CENTER,Marker.ANCHOR_BOTTOM);
+        marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM);
         marker.setTitle("Give it a title");
         //map.getOverlays().clear();
         map.getOverlays().add(marker);
         map.invalidate();
     }
 
-//Marker overlay zerstören über GONE
-//Callback fehlt
-//map events receiver single tab true->event nicht weiter
-    //alle aktionen
-
-    /*
-    public boolean onTouch(View v,MotionEvent ev) {
-        switch (v.getId()){
-            case R.id.map:
-                if(ev.getAction() == MotionEvent.ACTION_UP){
-                    Projection proj = map.getProjection();
-                    IGeoPoint p = proj.fromPixels((int)ev.getX(),(int)ev.getY());
-                    GeoPoint geo = new GeoPoint(p.getLatitude(),p.getLongitude());
-                    addMarker(geo);
-                    break;
-                }
-                break;
-        }
-        return true;
-    }
-*/
-    /* Test zu on SingleTapConfirmed
-    @Override public boolean onSingleTapConfirmed(final MotionEvent event, final MapView mapView){
-        boolean touched = hitTest(event, mapView);
-        if (touched){
-            if (mOnMarkerClickListener == null){
-                return onMarkerClickDefault(this, mapView);
-            } else {
-                return mOnMarkerClickListener.onMarkerClick(this, mapView);
-            }
-        } else
-            return touched;
-    }
-    */
-
- /*
-    private class myMapReceiver implements MapEventsReceiver{
-       @Override
-        public boolean singleTapConfirmedHelper(GeoPoint p) {
-            return false;
-        }
-
-       @Override
-        public boolean longPressHelper(GeoPoint p) {
-            return false;
-        }
-    }*/
 }
