@@ -106,7 +106,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         map.setTileSource(TileSourceFactory.MAPNIK);
 
 
-        map.setTilesScaledToDpi(true);
+
 
 
 
