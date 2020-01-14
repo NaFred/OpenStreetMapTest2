@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/position"
+        android:checkable="false"
+        android:icon="@android:drawable/radiobutton_off_background"
+        android:title="SET Position"
+        app:showAsAction="always" />
+    <item
+        android:id="@+id/radius"
+        android:title="Set Radius" />
+    <item
+        android:id="@+id/resetPosition"
+        android:title="Reset Positions" />
+    <item
+        android:id="@+id/personalInfo"
+        android:title="Personal Info" />
+</menu>
