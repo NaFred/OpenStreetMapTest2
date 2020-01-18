@@ -1,7 +1,6 @@
 package com.example.openstreetmaptest;
 
 import android.Manifest;
-import android.app.Activity;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.Intent;
@@ -14,15 +13,16 @@ import android.os.Build;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
+import android.telephony.SmsManager;
 import android.util.DisplayMetrics;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
@@ -31,17 +31,10 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
 
-import com.google.android.gms.maps.model.CameraPosition;
-import com.google.android.gms.maps.model.CircleOptions;
-import com.google.android.gms.maps.model.JointType;
-import com.google.android.gms.maps.model.LatLng;
-
-import org.osmdroid.api.IGeoPoint;
 import org.osmdroid.api.IMapController;
 
 import org.osmdroid.events.MapEventsReceiver;
 import org.osmdroid.views.MapController;
-import org.osmdroid.views.Projection;
 
 import org.osmdroid.views.overlay.MapEventsOverlay;
 import org.osmdroid.views.overlay.Marker;
@@ -49,14 +42,10 @@ import org.osmdroid.config.Configuration;
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
 import org.osmdroid.util.GeoPoint;
 import org.osmdroid.views.MapView;
-import org.osmdroid.views.overlay.OverlayItem;
 
 
-import org.osmdroid.views.overlay.OverlayManager;
 import org.osmdroid.views.overlay.Polygon;
-import org.osmdroid.views.overlay.Polyline;
 import org.osmdroid.views.overlay.ScaleBarOverlay;
-import org.osmdroid.views.overlay.compass.InternalCompassOrientationProvider;
 
 import org.osmdroid.views.overlay.gestures.RotationGestureOverlay;
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider;
@@ -64,6 +53,8 @@ import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay;
 
 import java.util.ArrayList;
 import java.util.List;
+
+
 
 
 /**
@@ -89,8 +80,21 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     final Context ctx = this;
     private Button okButton;
 
-
+    private float radius = 0;
     private LinearLayout radiusdialog;
+    private EditText inputRadius;
+    private EditText smsInput;
+    private EditText messageInput;
+
+    private String test;
+
+    private GeoPoint actualGeoPoint = new GeoPoint(49.867141, 8.638066);
+    private GeoPoint constGeoPoint = new GeoPoint(49.867141, 8.638066);
+    private MyLocationNewOverlay mLocationOverlay;
+
+    final SmsManager m = SmsManager.getDefault();
+    private String phoneNumber = "+15555215554";
+    private String messageText = "Hallo, MaxWie geht es dir?";
 
 
 
@@ -136,6 +140,12 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
 
 
 
+        //Request permission for sms
+        //requestPermissions(new String[]{Manifest.permission.SEND_SMS}
+         //       ,20);
+        //m.sendTextMessage(phoneNumber, null, messageText, null, null);
+
+
         //scalebar
         //final Context context = this.getActivity();
         final DisplayMetrics dm = ctx.getResources().getDisplayMetrics();
@@ -145,6 +155,10 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         mScaleBarOverlay.setScaleBarOffset(dm.widthPixels / 2, 10);
 
 
+        //my location overlay
+        mLocationOverlay = new MyLocationNewOverlay(new GpsMyLocationProvider(ctx),map);
+        //mLocationOverlay.setPersonIcon();
+        mLocationOverlay.enableMyLocation();
 
 
 
@@ -159,7 +173,8 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                 //Create GeoPoint
                 GeoPoint geoPoint = new GeoPoint(location.getLatitude(),location.getLongitude());
                 //Add GeoPoint on Map
-                //addMarker(geoPoint);          //uncomment for continious tracking
+                addMarker(geoPoint);          //uncomment for continious tracking
+                constGeoPoint = geoPoint;       //for testing
             }
 
             @Override
@@ -183,14 +198,15 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         };
 
         //generate Polygon
-        Polygon polygon = makeCircle(hochschule,100,map);
+        final Polygon polygon = makeCircle(hochschule,radius,map);
         polygon.setStrokeWidth((float)5.0);
 
         map.getOverlays().clear();  //init
         getGPS();
         map.getOverlays().add(mScaleBarOverlay);
         map.getOverlays().add(mRotationGestureOverlay);
-
+        //add my location
+        map.getOverlays().add(mLocationOverlay);
         map.getOverlays().add(polygon);
         //addMarker(hochschule);
         map.invalidate();
@@ -199,10 +215,13 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         final MapEventsReceiver mReceive = new MapEventsReceiver(){
             @Override
             public boolean singleTapConfirmedHelper(GeoPoint p) {
-                Toast.makeText(getBaseContext(),p.getLatitude() + " - "+p.getLongitude(), Toast.LENGTH_LONG).show();
+                //Toast.makeText(getBaseContext(),p.getLatitude() + " - "+p.getLongitude(), Toast.LENGTH_LONG).show();
                 //removeAllMarker();
                 map.getOverlays().remove(map.getOverlays().size()-1);
-                addMarker(p);
+                //addMarker(p);
+                actualGeoPoint = p;
+
+                clickInRadius();
 
                 return false;
             }
@@ -218,7 +237,6 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         map.invalidate();
 
         //map.setOnTouchListener(this);
-
     };
 
 
@@ -239,11 +257,13 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
             case 10:
                 getGPS();
                 break;
+            //case 20:
+               // sendSMS();
+                //break;
             default:
                 break;
         }
     }
-
     private void getGPS(){
         //check permissions
         //When permission not granted
@@ -260,6 +280,11 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         locManager.requestLocationUpdates("gps", 5000, 0, locListener);
     }
 
+    public void sendSMS(){
+        requestPermissions(new String[]{Manifest.permission.SEND_SMS}
+               ,20);
+        m.sendTextMessage(phoneNumber, null, messageText, null, null);
+    }
 
     private Polygon makeCircle(GeoPoint geoPoint, double radius, MapView map){
         //reset geopints for circle
@@ -274,8 +299,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         polygon.setFillColor(Color.argb(50, 255,0,0));
         geoPoints.add(geoPoints.get(0));    //forces the loop to close
         polygon.setPoints(geoPoints);
-        polygon.setTitle("AnkerArea");
-
+        //polygon.setTitle("AnkerArea");
         return polygon;
     }
 
@@ -298,6 +322,16 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         map.onPause();  //needed for compass, my location overlays, v6.0.0 and up
     }
 
+    public void clickInRadius(){
+        GeoPoint p = new GeoPoint(mLocationOverlay.getMyLocation());
+        if(p.distanceToAsDouble(hochschule)>radius){
+            Toast.makeText(getBaseContext(),"ausserhalb", Toast.LENGTH_LONG).show();
+        }else{
+
+            Toast.makeText(getBaseContext(),"innerhalb", Toast.LENGTH_LONG).show();
+        }
+    }
+
 
     public void addMarker(GeoPoint center){
         Marker marker = new Marker(map);
@@ -314,15 +348,61 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     }
 
 
-    public void openDialog(Context context) {
+    public void openRadiusDialog(final Context context) {
         final Dialog dialog = new Dialog(context);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setContentView(R.layout.radiusdialog);
+
+        //inputRadius.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        inputRadius = (EditText) dialog.findViewById(R.id.radiusInput);     //dialog muss gegeben sein, weil sonst der View nicht klar ist und es in eine null object reference läuft
+        //https://blog.codeonion.com/2015/10/03/android-how-to-fix-null-object-reference-error/
         okButton = dialog.findViewById(R.id.okButton);
         okButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                dialog.dismiss();
+                if (inputRadius.getText().toString().isEmpty()) {
+                    Toast.makeText(getApplicationContext(), "Fehler", Toast.LENGTH_SHORT).show();
+                    dialog.dismiss();
+                } else {
+                    radius = Float.parseFloat(inputRadius.getText().toString());
+                    Toast.makeText(getApplicationContext(),String.valueOf(radius), Toast.LENGTH_SHORT).show();
+
+                    Polygon polygon2 = makeCircle(actualGeoPoint,radius,map);
+                    polygon2.setStrokeWidth((float)5.0);
+                    map.getOverlays().add(polygon2);
+                    //addMarker(hochschule);
+                    map.invalidate();
+
+                    dialog.dismiss();
+                }
+            }
+        });
+        dialog.show();
+    }
+
+    public void openPersonalDialog(final Context context) {
+        final Dialog dialog = new Dialog(context);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(R.layout.personallayout);
+
+        //inputRadius.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        smsInput = (EditText) dialog.findViewById(R.id.smsInput);     //dialog muss gegeben sein, weil sonst der View nicht klar ist und es in eine null object reference läuft
+        //https://blog.codeonion.com/2015/10/03/android-how-to-fix-null-object-reference-error/
+        messageInput = (EditText) dialog.findViewById(R.id.smsMessageInput);
+        okButton = dialog.findViewById(R.id.okButton2);
+        okButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if (smsInput.getText().toString().isEmpty()) {
+                    Toast.makeText(getApplicationContext(), "Fehler", Toast.LENGTH_SHORT).show();
+                    dialog.dismiss();
+                } else {
+                    phoneNumber = smsInput.getText().toString();
+                    messageText = messageInput.getText().toString();
+                    Toast.makeText(getApplicationContext(),String.valueOf(phoneNumber), Toast.LENGTH_SHORT).show();
+                    sendSMS();
+                    dialog.dismiss();
+                }
             }
         });
         dialog.show();
@@ -340,11 +420,12 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
             case R.id.position:
                 return true;
             case R.id.radius:
-                openDialog(ctx);
+                openRadiusDialog(ctx);
                 return true;
             case R.id.resetPosition:
                 return true;
             case R.id.personalInfo:
+                openPersonalDialog(ctx);
                 return true;
             default:
                 return super.onOptionsItemSelected(item);
