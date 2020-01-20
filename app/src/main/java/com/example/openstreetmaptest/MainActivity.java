@@ -61,53 +61,46 @@ import java.util.List;
  *
  */
 public class MainActivity extends /*Activity*/AppCompatActivity {
+    final Context ctx = this;
     //Create Map
     MapView map = null;
-    //MapEventsReceiver receiver;
-    //Context context;
+    MapController mapController;
 
     //your items for polygon
     List<GeoPoint> geoPoints = new ArrayList<>();
     List<GeoPoint> points = new ArrayList<>();
+    private float radius = 0;
 
-    MapController mapController;
-
-    GeoPoint hochschule = new GeoPoint(49.867141, 8.638066);
-    //private MyLocationNewOverlay mLocationOverlay;
+    //gps location
     private LocationManager locManager;
     private LocationListener locListener;
 
-    final Context ctx = this;
-    private Button okButton;
+    //Geopoints for testing
+    private GeoPoint hochschule = new GeoPoint(49.867141, 8.638066);
+    private GeoPoint actualGeoPoint = new GeoPoint(49.867141, 8.638066);
+    private GeoPoint constGeoPoint = new GeoPoint(49.867141, 8.638066);
 
-    private float radius = 0;
+    private Button okButton;
+    private String test;
+
     private LinearLayout radiusdialog;
     private EditText inputRadius;
     private EditText smsInput;
     private EditText messageInput;
 
-    private String test;
-
-    private GeoPoint actualGeoPoint = new GeoPoint(49.867141, 8.638066);
-    private GeoPoint constGeoPoint = new GeoPoint(49.867141, 8.638066);
     private MyLocationNewOverlay mLocationOverlay;
 
     final SmsManager m = SmsManager.getDefault();
     private String phoneNumber = "+15555215554";
     private String messageText = "Hallo, MaxWie geht es dir?";
 
-
-
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        //start app in fullscreen mode without title bar
         startFullscreen();
         super.onCreate(savedInstanceState);
 
-        //handle permissions first, before map is created. not depicted here
-
-        //load/initialize the osmdroid configuration, this can be done
         //Context ctx = getApplicationContext();
-        Context ctx = getApplicationContext();
         Configuration.getInstance().load(ctx, PreferenceManager.getDefaultSharedPreferences(ctx));
         //setting this before the layout is inflated is a good idea
         //it 'should' ensure that the map has a writable location for the map cache, even without permissions
@@ -119,9 +112,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         locManager = (LocationManager) getSystemService(LOCATION_SERVICE);
 
         //inflate and create the map
-        //setContentView(R.layout.activity_main);
         setContentView(R.layout.main);
-
         map = findViewById(R.id.map);
         map.setTileSource(TileSourceFactory.MAPNIK);
 
@@ -133,7 +124,6 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         map.setBuiltInZoomControls(true);
         //Zoom with multi fingers
         map.setMultiTouchControls(true);
-
         //rotate
         RotationGestureOverlay mRotationGestureOverlay = new RotationGestureOverlay(ctx, map);
         mRotationGestureOverlay.setEnabled(true);
