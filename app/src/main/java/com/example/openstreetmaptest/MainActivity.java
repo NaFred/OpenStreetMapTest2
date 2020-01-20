@@ -76,6 +76,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     private GeoPoint hochschule = new GeoPoint(49.867141, 8.638066);
     private GeoPoint actualGeoPoint = new GeoPoint(49.867141, 8.638066);
     private GeoPoint startGeoPoint = new GeoPoint(49.867141, 8.638066);
+    private GeoPoint circleCenter;
 
     private Button okButton;
     private String test;
@@ -91,10 +92,12 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     private EditText messageInput;
 
     private MyLocationNewOverlay mLocationOverlay;
+    private RotationGestureOverlay mRotationGestureOverlay;
 
     final SmsManager m = SmsManager.getDefault();
     private String phoneNumber = "+15555215554";
-    private String messageText = "Your Ship Is Out Of Range?";
+    //private String phoneNumber = "017650182055";
+    private String messageText = "Your Ship Is Out Of Range!";
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -119,7 +122,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         //Zoom with multi fingers
         map.setMultiTouchControls(true);
         //rotate
-        RotationGestureOverlay mRotationGestureOverlay = new RotationGestureOverlay(ctx, map);
+        mRotationGestureOverlay = new RotationGestureOverlay(ctx, map);
         mRotationGestureOverlay.setEnabled(true);
         //scalebar
         setScaleBar();
@@ -128,11 +131,10 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         //mLocationOverlay.setPersonIcon();
         mLocationOverlay.enableMyLocation();
 
-
         //set the view of the map at start
-        setStartView(actualGeoPoint,18.0);
-
+        setStartView(actualGeoPoint,18.0);              //TODO start view
         //LocationListener erstellen
+
         locListener = new LocationListener() {
             @Override
             //when location changed (gps)
@@ -140,7 +142,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                 //Create GeoPoint
                 actualGeoPoint = new GeoPoint(location.getLatitude(),location.getLongitude());
                 //Add GeoPoint on Map
-                //addMarker(actualGeoPoint);          //uncomment for continious tracking
+                addMarker(actualGeoPoint);          //uncomment for continious tracking
                 geoPointInRadius();
                 if(geoPointInRadius() == false && isSMSalreadySend == false){
                     sendSMS();
@@ -166,34 +168,24 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
             }
         };
 
-        //generate Polygon
+        //generate and init Polygon
         polygon = makeCircle(hochschule,radius,map);
         polygon.setStrokeWidth((float)5.0);
 
         map.getOverlays().clear();  //init
         getGPS();
+
         map.getOverlays().add(mScaleBarOverlay);
         map.getOverlays().add(mRotationGestureOverlay);
         //add my location
         map.getOverlays().add(mLocationOverlay);
-        map.getOverlays().add(polygon);
+        //map.getOverlays().add(polygon);
         //addMarker(hochschule);
         map.invalidate();
 
         final MapEventsReceiver mReceive = new MapEventsReceiver(){
             @Override
             public boolean singleTapConfirmedHelper(GeoPoint p) {
-                //Toast.makeText(getBaseContext(),p.getLatitude() + " - "+p.getLongitude(), Toast.LENGTH_LONG).show();
-                //removeAllMarker();
-                //map.getOverlays().remove(map.getOverlays().size()-1);
-                //addMarker(p);
-                //startGeoPoint = p;
-                //radius = 200;
-                //Polygon polygon2 = makeCircle(startGeoPoint,radius,map);
-                //polygon2.setStrokeWidth((float)5.0);
-                //map.getOverlays().add(polygon2);
-                //addMarker(hochschule);
-                //map.invalidate();
                 return false;
             }
             @Override
@@ -203,13 +195,10 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                 return false;
             }
         };
-        //clearAllMarker();
 
         map.getOverlays().add(new MapEventsOverlay(mReceive));
         map.getOverlays().add(polygon);
         map.invalidate();
-
-        //map.setOnTouchListener(this);
     };
 
 
@@ -235,7 +224,6 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         iMapController = map.getController();
         iMapController.setZoom(d);
         iMapController.setCenter(p);
-
     }
 
     //Check permission results
@@ -288,10 +276,10 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         geoPoints.clear();
 
         for(int i=0;i<360;i++){
-            GeoPoint g = new GeoPoint(geoPoint.getLatitude(),geoPoint.getLongitude()).destinationPoint(radius,i);   //destination Point wegen der skalierung von Lat/long
-            geoPoints.add(g);
+            circleCenter = new GeoPoint(geoPoint.getLatitude(),geoPoint.getLongitude()).destinationPoint(radius,i);   //destination Point wegen der skalierung von Lat/long
+            geoPoints.add(circleCenter);
         }
-        Polygon polygon = new Polygon(map);
+        polygon = new Polygon(map);
 
         polygon.setFillColor(Color.argb(50, 255,0,0));
         geoPoints.add(geoPoints.get(0));    //forces the loop to close
