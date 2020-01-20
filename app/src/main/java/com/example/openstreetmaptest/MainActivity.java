@@ -30,11 +30,9 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
-
 import org.osmdroid.api.IMapController;
 
 import org.osmdroid.events.MapEventsReceiver;
-import org.osmdroid.views.MapController;
 
 import org.osmdroid.views.overlay.MapEventsOverlay;
 import org.osmdroid.views.overlay.Marker;
@@ -42,7 +40,6 @@ import org.osmdroid.config.Configuration;
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
 import org.osmdroid.util.GeoPoint;
 import org.osmdroid.views.MapView;
-
 
 import org.osmdroid.views.overlay.Polygon;
 import org.osmdroid.views.overlay.ScaleBarOverlay;
@@ -55,8 +52,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 
-
-
 /**
  *
  */
@@ -64,7 +59,8 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     final Context ctx = this;
     //Create Map
     MapView map = null;
-    MapController mapController;
+    private IMapController iMapController;
+
 
     //your items for polygon
     List<GeoPoint> geoPoints = new ArrayList<>();
@@ -78,10 +74,13 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     //Geopoints for testing
     private GeoPoint hochschule = new GeoPoint(49.867141, 8.638066);
     private GeoPoint actualGeoPoint = new GeoPoint(49.867141, 8.638066);
-    private GeoPoint constGeoPoint = new GeoPoint(49.867141, 8.638066);
+    private GeoPoint startGeoPoint = new GeoPoint(49.867141, 8.638066);
 
     private Button okButton;
     private String test;
+
+
+    ScaleBarOverlay mScaleBarOverlay;
 
     private LinearLayout radiusdialog;
     private EditText inputRadius;
@@ -102,11 +101,6 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
 
         //Context ctx = getApplicationContext();
         Configuration.getInstance().load(ctx, PreferenceManager.getDefaultSharedPreferences(ctx));
-        //setting this before the layout is inflated is a good idea
-        //it 'should' ensure that the map has a writable location for the map cache, even without permissions
-        //if no tiles are displayed, you can try overriding the cache path using Configuration.getInstance().setCachePath
-        //see also StorageUtils
-        //note, the load method also sets the HTTP User Agent to your application's package name, abusing osm's tile servers will get you banned based on this string
 
         //init LocationManager with Service Location
         locManager = (LocationManager) getSystemService(LOCATION_SERVICE);
@@ -116,10 +110,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         map = findViewById(R.id.map);
         map.setTileSource(TileSourceFactory.MAPNIK);
 
-        //default view Point
-        final IMapController mapController = map.getController();
-        mapController.setZoom(18.0);
-
+        //Set overlays for the map
         //Zoom Buttons
         map.setBuiltInZoomControls(true);
         //Zoom with multi fingers
@@ -127,33 +118,15 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         //rotate
         RotationGestureOverlay mRotationGestureOverlay = new RotationGestureOverlay(ctx, map);
         mRotationGestureOverlay.setEnabled(true);
-
-
-
-        //Request permission for sms
-        //requestPermissions(new String[]{Manifest.permission.SEND_SMS}
-         //       ,20);
-        //m.sendTextMessage(phoneNumber, null, messageText, null, null);
-
-
         //scalebar
-        //final Context context = this.getActivity();
-        final DisplayMetrics dm = ctx.getResources().getDisplayMetrics();
-        ScaleBarOverlay mScaleBarOverlay = new ScaleBarOverlay(map);
-        mScaleBarOverlay.setCentred(true);
-        //play around with these values to get the location on screen in the right place for your application
-        mScaleBarOverlay.setScaleBarOffset(dm.widthPixels / 2, 10);
-
-
+        setScaleBar();
         //my location overlay
         mLocationOverlay = new MyLocationNewOverlay(new GpsMyLocationProvider(ctx),map);
         //mLocationOverlay.setPersonIcon();
         mLocationOverlay.enableMyLocation();
 
-
-
-        mapController.setCenter(hochschule);
-        addMarker(hochschule);
+        //set the view of the map at start
+        setStartView(hochschule,18.0);
 
         //LocationListener erstellen
         locListener = new LocationListener() {
@@ -161,20 +134,18 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
             //when location changed (gps)
             public void onLocationChanged(Location location) {
                 //Create GeoPoint
-                GeoPoint geoPoint = new GeoPoint(location.getLatitude(),location.getLongitude());
+                actualGeoPoint = new GeoPoint(location.getLatitude(),location.getLongitude());
                 //Add GeoPoint on Map
-                addMarker(geoPoint);          //uncomment for continious tracking
-                constGeoPoint = geoPoint;       //for testing
+                addMarker(actualGeoPoint);          //uncomment for continious tracking
+                geoPointInRadius();
             }
 
             @Override
             public void onStatusChanged(String provider, int status, Bundle extras) {
-
             }
 
             @Override
             public void onProviderEnabled(String provider) {
-
             }
 
             @Override
@@ -201,7 +172,6 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         //addMarker(hochschule);
         map.invalidate();
 
-        //////////////////////////////////////////////////////////////////////////////
         final MapEventsReceiver mReceive = new MapEventsReceiver(){
             @Override
             public boolean singleTapConfirmedHelper(GeoPoint p) {
@@ -209,9 +179,15 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                 //removeAllMarker();
                 map.getOverlays().remove(map.getOverlays().size()-1);
                 //addMarker(p);
-                actualGeoPoint = p;
+                startGeoPoint = p;
+                radius = 200;
+                Polygon polygon2 = makeCircle(startGeoPoint,radius,map);
+                polygon2.setStrokeWidth((float)5.0);
+                map.getOverlays().add(polygon2);
+                //addMarker(hochschule);
+                map.invalidate();
 
-                clickInRadius();
+                geoPointInRadius();
 
                 return false;
             }
@@ -240,6 +216,21 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                 WindowManager.LayoutParams.FLAG_FULLSCREEN);
     }
 
+    public void setScaleBar(){
+        //scalebar
+        final DisplayMetrics dm = ctx.getResources().getDisplayMetrics();
+        mScaleBarOverlay = new ScaleBarOverlay(map);
+        mScaleBarOverlay.setCentred(true);
+        //play around with these values to get the location on screen in the right place for your application
+        mScaleBarOverlay.setScaleBarOffset(dm.widthPixels / 2, 10);
+    }
+    public void setStartView(GeoPoint p,double d){
+        iMapController = map.getController();
+        iMapController.setZoom(d);
+        iMapController.setCenter(p);
+
+    }
+
     //Check permission results
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -247,9 +238,9 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
             case 10:
                 getGPS();
                 break;
-            //case 20:
-               // sendSMS();
-                //break;
+            case 20:
+                sendSMS();
+                break;
             default:
                 break;
         }
@@ -269,10 +260,17 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         // this code won't execute IF permissions are not allowed, because in the line above there is return statement.
         locManager.requestLocationUpdates("gps", 5000, 0, locListener);
     }
-
     public void sendSMS(){
-        requestPermissions(new String[]{Manifest.permission.SEND_SMS}
-               ,20);
+        //check permissions
+        //When permission not granted
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
+            //when API >23
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                //request permissions with code 20
+                requestPermissions(new String[]{Manifest.permission.SEND_SMS}, 20);
+            }
+            return;
+        }
         m.sendTextMessage(phoneNumber, null, messageText, null, null);
     }
 
@@ -312,12 +310,10 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         map.onPause();  //needed for compass, my location overlays, v6.0.0 and up
     }
 
-    public void clickInRadius(){
-        GeoPoint p = new GeoPoint(mLocationOverlay.getMyLocation());
-        if(p.distanceToAsDouble(hochschule)>radius){
+    public void geoPointInRadius(){
+        if(actualGeoPoint.distanceToAsDouble(startGeoPoint)>radius){
             Toast.makeText(getBaseContext(),"ausserhalb", Toast.LENGTH_LONG).show();
         }else{
-
             Toast.makeText(getBaseContext(),"innerhalb", Toast.LENGTH_LONG).show();
         }
     }
@@ -327,7 +323,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         Marker marker = new Marker(map);
         marker.setPosition(center);
         marker.setAnchor(Marker.ANCHOR_CENTER,Marker.ANCHOR_BOTTOM);
-        marker.setTitle("Give it a title");
+        //marker.setTitle("Give it a title");
         map.getOverlays().add(marker);
         map.invalidate();
     }
@@ -357,11 +353,11 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                     radius = Float.parseFloat(inputRadius.getText().toString());
                     Toast.makeText(getApplicationContext(),String.valueOf(radius), Toast.LENGTH_SHORT).show();
 
-                    Polygon polygon2 = makeCircle(actualGeoPoint,radius,map);
-                    polygon2.setStrokeWidth((float)5.0);
-                    map.getOverlays().add(polygon2);
+                    //Polygon polygon2 = makeCircle(actualGeoPoint,radius,map);
+                    //polygon2.setStrokeWidth((float)5.0);
+                    //map.getOverlays().add(polygon2);
                     //addMarker(hochschule);
-                    map.invalidate();
+                    //map.invalidate();
 
                     dialog.dismiss();
                 }
