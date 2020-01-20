@@ -66,6 +66,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     List<GeoPoint> geoPoints = new ArrayList<>();
     List<GeoPoint> points = new ArrayList<>();
     private float radius = 0;
+    private boolean isSMSalreadySend = false;
 
     //gps location
     private LocationManager locManager;
@@ -79,6 +80,8 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     private Button okButton;
     private String test;
 
+    private Polygon polygon;
+    private Marker marker;
 
     ScaleBarOverlay mScaleBarOverlay;
 
@@ -91,7 +94,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
 
     final SmsManager m = SmsManager.getDefault();
     private String phoneNumber = "+15555215554";
-    private String messageText = "Hallo, MaxWie geht es dir?";
+    private String messageText = "Your Ship Is Out Of Range?";
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -125,8 +128,9 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         //mLocationOverlay.setPersonIcon();
         mLocationOverlay.enableMyLocation();
 
+
         //set the view of the map at start
-        setStartView(hochschule,18.0);
+        setStartView(actualGeoPoint,18.0);
 
         //LocationListener erstellen
         locListener = new LocationListener() {
@@ -136,8 +140,12 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                 //Create GeoPoint
                 actualGeoPoint = new GeoPoint(location.getLatitude(),location.getLongitude());
                 //Add GeoPoint on Map
-                addMarker(actualGeoPoint);          //uncomment for continious tracking
+                //addMarker(actualGeoPoint);          //uncomment for continious tracking
                 geoPointInRadius();
+                if(geoPointInRadius() == false && isSMSalreadySend == false){
+                    sendSMS();
+                    isSMSalreadySend = true;
+                }
             }
 
             @Override
@@ -159,7 +167,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         };
 
         //generate Polygon
-        final Polygon polygon = makeCircle(hochschule,radius,map);
+        polygon = makeCircle(hochschule,radius,map);
         polygon.setStrokeWidth((float)5.0);
 
         map.getOverlays().clear();  //init
@@ -177,22 +185,21 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
             public boolean singleTapConfirmedHelper(GeoPoint p) {
                 //Toast.makeText(getBaseContext(),p.getLatitude() + " - "+p.getLongitude(), Toast.LENGTH_LONG).show();
                 //removeAllMarker();
-                map.getOverlays().remove(map.getOverlays().size()-1);
+                //map.getOverlays().remove(map.getOverlays().size()-1);
                 //addMarker(p);
-                startGeoPoint = p;
-                radius = 200;
-                Polygon polygon2 = makeCircle(startGeoPoint,radius,map);
-                polygon2.setStrokeWidth((float)5.0);
-                map.getOverlays().add(polygon2);
+                //startGeoPoint = p;
+                //radius = 200;
+                //Polygon polygon2 = makeCircle(startGeoPoint,radius,map);
+                //polygon2.setStrokeWidth((float)5.0);
+                //map.getOverlays().add(polygon2);
                 //addMarker(hochschule);
-                map.invalidate();
-
-                geoPointInRadius();
-
+                //map.invalidate();
                 return false;
             }
             @Override
             public boolean longPressHelper(GeoPoint p) {
+                radius = (float) p.distanceToAsDouble(actualGeoPoint);
+                updateCircle(actualGeoPoint,radius,map);
                 return false;
             }
         };
@@ -258,6 +265,8 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
             return;
         }
         // this code won't execute IF permissions are not allowed, because in the line above there is return statement.
+        //Init Geopoint with current gps location
+        actualGeoPoint = mLocationOverlay.getMyLocation();
         locManager.requestLocationUpdates("gps", 5000, 0, locListener);
     }
     public void sendSMS(){
@@ -310,27 +319,25 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         map.onPause();  //needed for compass, my location overlays, v6.0.0 and up
     }
 
-    public void geoPointInRadius(){
+    public boolean geoPointInRadius(){
         if(actualGeoPoint.distanceToAsDouble(startGeoPoint)>radius){
             Toast.makeText(getBaseContext(),"ausserhalb", Toast.LENGTH_LONG).show();
+            return false;
         }else{
+            isSMSalreadySend = false;
             Toast.makeText(getBaseContext(),"innerhalb", Toast.LENGTH_LONG).show();
+            return true;
         }
     }
 
 
     public void addMarker(GeoPoint center){
-        Marker marker = new Marker(map);
+        marker = new Marker(map);
         marker.setPosition(center);
         marker.setAnchor(Marker.ANCHOR_CENTER,Marker.ANCHOR_BOTTOM);
         //marker.setTitle("Give it a title");
         map.getOverlays().add(marker);
         map.invalidate();
-    }
-
-    public void removeAllMarker(){
-        map.getOverlays().clear();
-        //map.invalidate();
     }
 
 
@@ -353,17 +360,24 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                     radius = Float.parseFloat(inputRadius.getText().toString());
                     Toast.makeText(getApplicationContext(),String.valueOf(radius), Toast.LENGTH_SHORT).show();
 
-                    //Polygon polygon2 = makeCircle(actualGeoPoint,radius,map);
-                    //polygon2.setStrokeWidth((float)5.0);
-                    //map.getOverlays().add(polygon2);
-                    //addMarker(hochschule);
-                    //map.invalidate();
-
+                    updateCircle(actualGeoPoint, radius, map);
                     dialog.dismiss();
                 }
             }
         });
         dialog.show();
+    }
+
+    public void updateCircle(GeoPoint p, float radius, MapView map){
+        map.getOverlays().remove(polygon);
+        map.getOverlays().remove(marker);
+        polygon = makeCircle(p,radius,map);
+        polygon.setStrokeWidth((float)5.0);
+        map.getOverlays().add(polygon);
+        map.invalidate();
+        Toast.makeText(getBaseContext(),"New Radius Set", Toast.LENGTH_LONG).show();
+        startGeoPoint = p;
+        addMarker(startGeoPoint);
     }
 
     public void openPersonalDialog(final Context context) {
