@@ -53,7 +53,8 @@ import java.util.List;
 
 
 /**
- *
+ * @brief The "Ankerwache" app is used to capture the position of the mobile device using openstreetmap.
+ * To do this, a radius around the given position is defined by clicking on the map or using a menu. If this is left, a warning is sent to a second device via SMS.
  */
 public class MainActivity extends /*Activity*/AppCompatActivity {
     final Context ctx = this;
@@ -73,9 +74,9 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     private LocationListener locListener;
 
     //Geopoints for testing
-    private GeoPoint hochschule = new GeoPoint(49.867141, 8.638066);
-    private GeoPoint actualGeoPoint = new GeoPoint(49.867141, 8.638066);
-    private GeoPoint startGeoPoint = new GeoPoint(49.867141, 8.638066);
+    //private GeoPoint hochschule = new GeoPoint(49.867141, 8.638066);
+    public GeoPoint actualGeoPoint = new GeoPoint(1.0, 1.0);
+    private GeoPoint startGeoPoint = new GeoPoint(1.0, 1.0);
     private GeoPoint circleCenter;
 
     private Button okButton;
@@ -86,6 +87,10 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
 
     ScaleBarOverlay mScaleBarOverlay;
 
+    Location currentLocation;
+    private double longitude = 0;
+    private double latitude = 0;
+
     private LinearLayout radiusdialog;
     private EditText inputRadius;
     private EditText smsInput;
@@ -95,15 +100,27 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     private RotationGestureOverlay mRotationGestureOverlay;
 
     final SmsManager m = SmsManager.getDefault();
-    private String phoneNumber = "+15555215554";
-    //private String phoneNumber = "017650182055";
+    //private String phoneNumber = "+15555215554";
+    private String phoneNumber = "017650182055";
     private String messageText = "Your Ship Is Out Of Range!";
 
+
+    //private Location location;
+
+    /**
+     * @brief This method creates the map and initializes the values for displaying positions. The map is build up with a scalebar, roatation feature, zoom feature, a moving position target
+     * and a location listener.
+     * @param savedInstanceState
+     */
     @Override
     public void onCreate(Bundle savedInstanceState) {
         //start app in fullscreen mode without title bar
         startFullscreen();
         super.onCreate(savedInstanceState);
+
+        //inital values
+        //actualGeoPoint.setLatitude(49.867141);      //TODO safed instance state
+        //actualGeoPoint.setLongitude(8.638066);
 
         //Context ctx = getApplicationContext();
         Configuration.getInstance().load(ctx, PreferenceManager.getDefaultSharedPreferences(ctx));
@@ -127,27 +144,62 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         //scalebar
         setScaleBar();
         //my location overlay
-        mLocationOverlay = new MyLocationNewOverlay(new GpsMyLocationProvider(ctx),map);
+        mLocationOverlay = new MyLocationNewOverlay(new GpsMyLocationProvider(ctx), map);
         //mLocationOverlay.setPersonIcon();
         mLocationOverlay.enableMyLocation();
 
-        //set the view of the map at start
-        setStartView(actualGeoPoint,18.0);              //TODO start view
+        //init location
+        //currentLocation.setLatitude(actualGeoPoint.getLatitude());
+        //currentLocation.setLongitude(actualGeoPoint.getLongitude());
+
+
         //LocationListener erstellen
+        //if(location != null) {
+            //location = getLastBestLocation();
+
+            //actualGeoPoint.setLongitude(location.getLongitude());
+           // actualGeoPoint.setLatitude(location.getLatitude());
+            //startGeoPoint.setLongitude(location.getLongitude());
+            //startGeoPoint.setLatitude(location.getLatitude());
+        //}else{
+            //location = getLastBestLocation();
+
+            actualGeoPoint.setLongitude(1.0);
+            actualGeoPoint.setLatitude(1.0);
+            //actualGeoPoint.setLongitude(location.getLongitude());
+            //actualGeoPoint.setLatitude(location.getLatitude());
+
+        //}
+        //set the view of the map at start
+        //setStartView(startGeoPoint,18.0);              //TODO start view
 
         locListener = new LocationListener() {
+
             @Override
             //when location changed (gps)
             public void onLocationChanged(Location location) {
-                //Create GeoPoint
-                actualGeoPoint = new GeoPoint(location.getLatitude(),location.getLongitude());
-                //Add GeoPoint on Map
-                addMarker(actualGeoPoint);          //uncomment for continious tracking
-                geoPointInRadius();
-                if(geoPointInRadius() == false && isSMSalreadySend == false){
-                    sendSMS();
-                    isSMSalreadySend = true;
-                }
+
+                //if (location != null) {
+                    //Create GeoPoint
+                    //actualGeoPoint = new GeoPoint(location.getLatitude(),location.getLongitude());
+                    actualGeoPoint.setLongitude(location.getLongitude());
+                    actualGeoPoint.setLatitude(location.getLatitude());
+
+
+                    if (radius > 0) {
+                        addMarker(actualGeoPoint);          //uncomment for continious tracking
+                        //Toast.makeText(getBaseContext(), String.valueOf(radius), Toast.LENGTH_LONG).show();
+                        geoPointInRadius();
+                        if (geoPointInRadius() == false /*&& isSMSalreadySend == false*/) {
+                            sendSMS();
+                            isSMSalreadySend = true;
+                        }
+                    }
+                //} else {
+                //    location = getLastBestLocation();
+                //    actualGeoPoint.setLongitude(location.getLongitude());
+                //    actualGeoPoint.setLatitude(location.getLatitude());
+                //}
             }
 
             @Override
@@ -169,40 +221,52 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         };
 
         //generate and init Polygon
-        polygon = makeCircle(hochschule,radius,map);
-        polygon.setStrokeWidth((float)5.0);
+        polygon = makeCircle(actualGeoPoint, radius, map);
+        polygon.setStrokeWidth((float) 5.0);
 
         map.getOverlays().clear();  //init
-        getGPS();
+        //getGPS();
 
         map.getOverlays().add(mScaleBarOverlay);
         map.getOverlays().add(mRotationGestureOverlay);
         //add my location
         map.getOverlays().add(mLocationOverlay);
+
+        //set the view of the map at start
+
+        setStartView(actualGeoPoint, 18.0);              //TODO start view
+        map.invalidate();
+        getGPS();
+
         //map.getOverlays().add(polygon);
         //addMarker(hochschule);
-        map.invalidate();
+        //map.invalidate();
 
-        final MapEventsReceiver mReceive = new MapEventsReceiver(){
+        final MapEventsReceiver mReceive = new MapEventsReceiver() {
             @Override
             public boolean singleTapConfirmedHelper(GeoPoint p) {
                 return false;
             }
+
             @Override
             public boolean longPressHelper(GeoPoint p) {
                 radius = (float) p.distanceToAsDouble(actualGeoPoint);
-                updateCircle(actualGeoPoint,radius,map);
+                startGeoPoint = p;
+                addMarker(startGeoPoint);
+                updateCircle(actualGeoPoint, radius, map);
                 return false;
             }
         };
 
         map.getOverlays().add(new MapEventsOverlay(mReceive));
         map.getOverlays().add(polygon);
-        map.invalidate();
-    };
+        //map.invalidate();
+    }
 
-
-    public void startFullscreen(){
+    /**
+     * @brief This function sets the start up parameters for fullscreen mode. The app is launched in fullscreen without title bar.
+     */
+    public void startFullscreen() {
         //start app without Title
         //requestWindowFeature(getWindow().FEATURE_NO_TITLE);
         requestWindowFeature(getWindow().FEATURE_NO_TITLE);
@@ -212,7 +276,10 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                 WindowManager.LayoutParams.FLAG_FULLSCREEN);
     }
 
-    public void setScaleBar(){
+    /**
+     * @brief This function initializes the scalebar. It is displayed in the middle top edge of the screen.
+     */
+    public void setScaleBar() {
         //scalebar
         final DisplayMetrics dm = ctx.getResources().getDisplayMetrics();
         mScaleBarOverlay = new ScaleBarOverlay(map);
@@ -220,13 +287,64 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         //play around with these values to get the location on screen in the right place for your application
         mScaleBarOverlay.setScaleBarOffset(dm.widthPixels / 2, 10);
     }
-    public void setStartView(GeoPoint p,double d){
+
+    /**
+     * @brief This function sets the start view of the app at the very first start. Zoom level and center view are set.
+     * @param p The geoPoint fur the view center as a geoPoint
+     * @param d The zoom level as double
+     */
+    public void setStartView(GeoPoint p, double d) {
         iMapController = map.getController();
         iMapController.setZoom(d);
         iMapController.setCenter(p);
     }
+    public void centerMap(){
+        actualGeoPoint = mLocationOverlay.getMyLocation();
+        iMapController.setCenter(actualGeoPoint);
+    }
 
-    //Check permission results
+
+
+    /**
+     * @brief This function returns the best last known location of the mobile device by gps or network provider.
+     * @return the last known best location
+     */
+    private Location getLastBestLocation() {
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                //request permissions with code 10
+                requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION,Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.INTERNET}
+                        ,30);
+            }
+        }
+        Location locationGPS = locManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+        Location locationNet = locManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+
+        long GPSLocationTime = 0;
+        if (null != locationGPS) {
+            GPSLocationTime = locationGPS.getTime();
+        }
+
+        long NetLocationTime = 0;
+
+        if (null != locationNet) {
+            NetLocationTime = locationNet.getTime();
+        }
+
+        if (0 < GPSLocationTime - NetLocationTime) {
+            return locationGPS;
+        } else {
+            return locationNet;
+        }
+    }
+
+
+    /**
+     * @brief This function decides by the requestCode of the requestPermission, which member function is chosen and executed.
+     * @param requestCode The code to be switched of choosing a function as integer
+     * @param permissions The name of the permission as a string
+     * @param grantResults The state of the permission result (permission granted, not granted) as an array of integers
+     */
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         switch (requestCode){
@@ -236,10 +354,17 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
             case 20:
                 sendSMS();
                 break;
+            case 30:
+                getLastBestLocation();
+                break;
             default:
                 break;
         }
     }
+
+    /**
+     * @brief This function asks for gps permissions and if granted, requests a location update by the locationListener with minimum time of 5 seconds.
+     */
     private void getGPS(){
         //check permissions
         //When permission not granted
@@ -254,9 +379,13 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         }
         // this code won't execute IF permissions are not allowed, because in the line above there is return statement.
         //Init Geopoint with current gps location
-        actualGeoPoint = mLocationOverlay.getMyLocation();
+        //actualGeoPoint = mLocationOverlay.getMyLocation();
         locManager.requestLocationUpdates("gps", 5000, 0, locListener);
     }
+
+    /**
+     * @brief This function ask for permission to send a SMS to a secondary device, after getting the granted permission.
+     */
     public void sendSMS(){
         //check permissions
         //When permission not granted
@@ -271,6 +400,13 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         m.sendTextMessage(phoneNumber, null, messageText, null, null);
     }
 
+    /**
+     * @brief This function returns a circle on the map as a polygon shape.
+     * @param geoPoint The center point of the circle as a GeoPoint
+     * @param radius The radius of the circle as a double (will be casted to a float)
+     * @param map The map that is displayed as a MapView
+     * @return The polygon shape (circle)
+     */
     private Polygon makeCircle(GeoPoint geoPoint, double radius, MapView map){
         //reset geopints for circle
         geoPoints.clear();
@@ -288,7 +424,9 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         return polygon;
     }
 
-
+    /**
+     * @brief This function resumes the app after a pause.
+     */
     public void onResume(){
         super.onResume();
         //this will refresh the osmdroid configuration on resuming.
@@ -298,6 +436,9 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         map.onResume(); //needed for compass, my location overlays, v6.0.0 and up
     }
 
+    /**
+     * @brief This function pauses the app (e.g. getting into background).
+     */
     public void onPause(){
         super.onPause();
         //this will refresh the osmdroid configuration on resuming.
@@ -307,18 +448,31 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         map.onPause();  //needed for compass, my location overlays, v6.0.0 and up
     }
 
+    /**
+     * @brief This function checks weather the current position is in the set radius (true) or not (false).
+     * @return true for being into the radius, else false
+     */
     public boolean geoPointInRadius(){
-        if(actualGeoPoint.distanceToAsDouble(startGeoPoint)>radius){
-            Toast.makeText(getBaseContext(),"ausserhalb", Toast.LENGTH_LONG).show();
+        double test = actualGeoPoint.distanceToAsDouble(startGeoPoint);
+        double testact = actualGeoPoint.getLatitude();
+        double teststart = startGeoPoint.getLatitude();
+        Toast.makeText(getBaseContext(), toString().valueOf(test)+" "+toString().valueOf(testact)+" "+toString().valueOf(teststart), Toast.LENGTH_LONG).show();
+        if (actualGeoPoint.distanceToAsDouble(startGeoPoint) > radius) {
+            Toast.makeText(getBaseContext(), "ausserhalb", Toast.LENGTH_LONG).show();
             return false;
-        }else{
+        } else {
             isSMSalreadySend = false;
-            Toast.makeText(getBaseContext(),"innerhalb", Toast.LENGTH_LONG).show();
+            //Toast.makeText(getBaseContext(), "innerhalb", Toast.LENGTH_LONG).show();
+            //Toast.makeText(getBaseContext(), String.valueOf(actualGeoPoint.getLatitude()), Toast.LENGTH_LONG).show();
             return true;
         }
+
     }
 
-
+    /**
+     * @brief This function adds a marker on the map.
+     * @param center The point that is marked on the map as a GeoPoint
+     */
     public void addMarker(GeoPoint center){
         marker = new Marker(map);
         marker.setPosition(center);
@@ -328,7 +482,11 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         map.invalidate();
     }
 
-
+    /**
+     * @brief This function opens an user dialog (alert dialog) whrer the user can input the radius of the circle.
+     * The input can be confirmed with the OK button.
+     * @param context the current app as a Context
+     */
     public void openRadiusDialog(final Context context) {
         final Dialog dialog = new Dialog(context);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -356,18 +514,29 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         dialog.show();
     }
 
+    /**
+     * @brief This function updates the circle on the map with new parameters.
+     * @param p The center of the circle as a GeoPoint
+     * @param radius The radius of the circle as a float
+     * @param map The map as a MapView
+     */
     public void updateCircle(GeoPoint p, float radius, MapView map){
         map.getOverlays().remove(polygon);
         map.getOverlays().remove(marker);
         polygon = makeCircle(p,radius,map);
         polygon.setStrokeWidth((float)5.0);
         map.getOverlays().add(polygon);
-        map.invalidate();
+        //map.invalidate();
         Toast.makeText(getBaseContext(),"New Radius Set", Toast.LENGTH_LONG).show();
-        startGeoPoint = p;
-        addMarker(startGeoPoint);
+        //startGeoPoint = p;
+        //addMarker(startGeoPoint);
     }
 
+    /**
+     * @brief This function opens as user dialog (alert dialog) in which the user can enter personal information. The phone number and the message for the SMS can be entered.
+     * The input can be confirmed with the OK button.
+     * @param context
+     */
     public void openPersonalDialog(final Context context) {
         final Dialog dialog = new Dialog(context);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -395,17 +564,31 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         });
         dialog.show();
     }
+
+    /**
+     * @brief This function creates an option menu in the menu bar.
+     * The menu has a position, radius, reset and personal information item.
+     * @param menu the menu that opens as a Menu
+     * @return true, when the menu can be created
+     */
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         MenuInflater inflater = getMenuInflater();
         inflater.inflate(R.menu.menu, menu);
         return true;
     }
+
+    /**
+     * @brief This function switches which menu item is chosen by a click.
+     * @param item The item that is clicked as an MenuItem
+     * @return true, if an item could be selected
+     */
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         // Handle item selection
         switch (item.getItemId()) {
             case R.id.position:
+                centerMap();
                 return true;
             case R.id.radius:
                 openRadiusDialog(ctx);
