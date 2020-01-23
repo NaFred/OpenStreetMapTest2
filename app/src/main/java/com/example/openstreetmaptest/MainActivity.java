@@ -4,16 +4,19 @@ import android.Manifest;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.media.MediaPlayer;
 import android.os.Build;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
 import android.telephony.SmsManager;
+import android.text.util.Linkify;
 import android.util.DisplayMetrics;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -24,11 +27,13 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
+
 
 import org.osmdroid.api.IMapController;
 
@@ -44,12 +49,22 @@ import org.osmdroid.views.MapView;
 import org.osmdroid.views.overlay.Polygon;
 import org.osmdroid.views.overlay.ScaleBarOverlay;
 
+import org.osmdroid.views.overlay.compass.CompassOverlay;
+import org.osmdroid.views.overlay.compass.InternalCompassOrientationProvider;
 import org.osmdroid.views.overlay.gestures.RotationGestureOverlay;
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider;
 import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay;
 
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Vector;
+import java.util.regex.Pattern;
 
 
 /**
@@ -86,6 +101,8 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     private Marker marker;
 
     ScaleBarOverlay mScaleBarOverlay;
+    CompassOverlay mCompassOverlay;
+
 
     Location currentLocation;
     private double longitude = 0;
@@ -100,11 +117,17 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     private RotationGestureOverlay mRotationGestureOverlay;
 
     final SmsManager m = SmsManager.getDefault();
-    //private String phoneNumber = "+15555215554";
-    private String phoneNumber = "017650182055";
+    private String phoneNumber = "+15555215554";
+    //private String phoneNumber = "017650182055";
     private String messageText = "Your Ship Is Out Of Range!";
 
+    private Vector<GeoPoint> markers = new Vector<GeoPoint>();
+    //private Vector<Double> markerLatitude = new Vector<Double>();
 
+    private boolean isFirstStart = true;
+    //declare shared preference and editor
+    SharedPreferences pref;
+    SharedPreferences.Editor editor;
     //private Location location;
 
     /**
@@ -121,6 +144,22 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         //inital values
         //actualGeoPoint.setLatitude(49.867141);      //TODO safed instance state
         //actualGeoPoint.setLongitude(8.638066);
+
+        //read shared preferences and save in editor
+        pref = getApplicationContext().getSharedPreferences("myPref",MODE_PRIVATE);
+        editor = pref.edit();
+
+        if(pref.contains("phoneNumber")){
+            phoneNumber = pref.getString("phoneNumber", "0123456789");
+        }
+        if(pref.contains("messageText")){
+            messageText = pref.getString("messageText", "Your Ship Is Out Of Range!");
+        }
+        if(pref.contains("firstStart")){
+            //read out value if it was saved before
+            isFirstStart =  pref.getBoolean("firstStart", true);
+        }
+
 
         //Context ctx = getApplicationContext();
         Configuration.getInstance().load(ctx, PreferenceManager.getDefaultSharedPreferences(ctx));
@@ -148,6 +187,10 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         //mLocationOverlay.setPersonIcon();
         mLocationOverlay.enableMyLocation();
 
+        mCompassOverlay = new CompassOverlay(ctx, new InternalCompassOrientationProvider(ctx), map);
+        mCompassOverlay.enableCompass();
+
+
         //init location
         //currentLocation.setLatitude(actualGeoPoint.getLatitude());
         //currentLocation.setLongitude(actualGeoPoint.getLongitude());
@@ -163,9 +206,38 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
             //startGeoPoint.setLatitude(location.getLatitude());
         //}else{
             //location = getLastBestLocation();
+        //map.getOverlays().clear();  //init
 
             actualGeoPoint.setLongitude(1.0);
             actualGeoPoint.setLatitude(1.0);
+
+            if(savedInstanceState != null) {
+                actualGeoPoint.setLatitude(savedInstanceState.getDouble("actualLatitude"));
+                actualGeoPoint.setLongitude(savedInstanceState.getDouble("actualLongitude"));
+                startGeoPoint.setLatitude(savedInstanceState.getDouble("startLatitude"));
+                startGeoPoint.setLongitude(savedInstanceState.getDouble("startLongitude"));
+                radius = savedInstanceState.getFloat("radius");
+                isSMSalreadySend = savedInstanceState.getBoolean("isSMSalreadySend");
+                phoneNumber = savedInstanceState.getString("phoneNumber");
+
+
+                try {
+                    FileInputStream fileInputStream = ctx.openFileInput("test2");
+                    ObjectInputStream objectInputStream = new ObjectInputStream(fileInputStream);
+
+                    Vector<GeoPoint> list = (Vector<GeoPoint>)objectInputStream.readObject();
+                    for(int i =0;i<list.size();i++) {
+                        //marker = new Marker(map);
+                        addMarker(list.get(i));
+                    }
+
+
+                    objectInputStream.close();
+                    fileInputStream.close();
+                } catch (IOException | ClassNotFoundException e) {
+                    e.printStackTrace();
+                }
+            }
             //actualGeoPoint.setLongitude(location.getLongitude());
             //actualGeoPoint.setLatitude(location.getLatitude());
 
@@ -184,14 +256,21 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                     //actualGeoPoint = new GeoPoint(location.getLatitude(),location.getLongitude());
                     actualGeoPoint.setLongitude(location.getLongitude());
                     actualGeoPoint.setLatitude(location.getLatitude());
-
+                if(isFirstStart == true){
+                    centerMap();
+                    //openPersonalDialog(ctx);
+                    editor.putBoolean("firstStart",false);
+                    editor.commit();
+                    isFirstStart = false;
+                }
 
                     if (radius > 0) {
                         addMarker(actualGeoPoint);          //uncomment for continious tracking
                         //Toast.makeText(getBaseContext(), String.valueOf(radius), Toast.LENGTH_LONG).show();
                         geoPointInRadius();
-                        if (geoPointInRadius() == false /*&& isSMSalreadySend == false*/) {
-                            sendSMS();
+                        if (geoPointInRadius() == false && isSMSalreadySend == false) {
+                            //sendSMS();
+                            openAlertDialog(ctx);
                             isSMSalreadySend = true;
                         }
                     }
@@ -221,10 +300,10 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         };
 
         //generate and init Polygon
-        polygon = makeCircle(actualGeoPoint, radius, map);
+        polygon = makeCircle(startGeoPoint, radius, map);
         polygon.setStrokeWidth((float) 5.0);
 
-        map.getOverlays().clear();  //init
+
         //getGPS();
 
         map.getOverlays().add(mScaleBarOverlay);
@@ -232,11 +311,21 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         //add my location
         map.getOverlays().add(mLocationOverlay);
 
+        map.getOverlays().add(mCompassOverlay);
+
+
         //set the view of the map at start
 
         setStartView(actualGeoPoint, 18.0);              //TODO start view
         map.invalidate();
+        if(isFirstStart == true){
+            //centerMap();
+            openPersonalDialog(ctx);
+            //editor.putBoolean("firstStart",false);
+            editor.commit();
+        }
         getGPS();
+
 
         //map.getOverlays().add(polygon);
         //addMarker(hochschule);
@@ -251,9 +340,9 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
             @Override
             public boolean longPressHelper(GeoPoint p) {
                 radius = (float) p.distanceToAsDouble(actualGeoPoint);
-                startGeoPoint = p;
+                startGeoPoint = mLocationOverlay.getMyLocation();
                 addMarker(startGeoPoint);
-                updateCircle(actualGeoPoint, radius, map);
+                updateCircle(startGeoPoint, radius, map);
                 return false;
             }
         };
@@ -303,7 +392,38 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         iMapController.setCenter(actualGeoPoint);
     }
 
+    public void onSaveInstanceState(Bundle savedInstanceState) {
+        super.onSaveInstanceState(savedInstanceState);
 
+        //get GeoPoint
+        double actualLatitude = actualGeoPoint.getLatitude();
+        double actualLongitude = actualGeoPoint.getLongitude();
+        double startLatitude = startGeoPoint.getLatitude();
+        double startLongitude = startGeoPoint.getLongitude();
+
+
+        map.invalidate();
+        //save Geopoint
+        savedInstanceState.putDouble("actualLatitude", actualLatitude);
+        savedInstanceState.putDouble("actualLongitude", actualLongitude);
+        savedInstanceState.putDouble("startLatitude", startLatitude);
+        savedInstanceState.putDouble("startLongitude", startLongitude);
+        savedInstanceState.putFloat("radius", radius);
+        savedInstanceState.putBoolean("isSMSalreadySend", isSMSalreadySend);
+        savedInstanceState.putString("phoneNumber",phoneNumber);
+
+        //savedInstanceState.putDoubleArray("markerLongitude", []markerLongitude);
+        String fileName = "test2";
+        try {
+            FileOutputStream fos = ctx.openFileOutput(fileName, Context.MODE_PRIVATE);
+            ObjectOutputStream os = new ObjectOutputStream(fos);
+            os.writeObject(markers);
+            os.close();
+            fos.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 
     /**
      * @brief This function returns the best last known location of the mobile device by gps or network provider.
@@ -336,6 +456,23 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         } else {
             return locationNet;
         }
+    }
+
+    private void resetOverlays(){
+        int count =0;
+        for(int i = 0;i<map.getOverlays().size();i++)
+        {
+
+            if(map.getOverlays().get(i) instanceof Marker) {
+                map.getOverlays().remove(marker);
+                count++;
+            }
+            // if(map.getOverlays().get(i)==marker){
+           //     map.getOverlays().remove(marker);
+           // }
+        }
+        Toast.makeText(getBaseContext(), String.valueOf(count), Toast.LENGTH_LONG).show();
+        map.invalidate();
     }
 
 
@@ -397,7 +534,16 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
             }
             return;
         }
-        m.sendTextMessage(phoneNumber, null, messageText, null, null);
+        TextView x = new TextView(ctx);
+        //x.setText("http://maps.google.com/maps?q="+actualGeoPoint.getLatitude()+","+actualGeoPoint.getLongitude());
+
+        x.setText("http://www.openstreetmap.org/?mlat=" + actualGeoPoint.getLatitude() + "&mlon=" + actualGeoPoint.getLongitude()+"&zoom=14&layers=M");
+        Pattern pattern = Pattern.compile(".*", Pattern.DOTALL);
+
+        //Linkify.addLinks(x, pattern, "http://maps.google.com/maps?q="+actualGeoPoint.getLatitude()+","+actualGeoPoint.getLongitude());
+        Linkify.addLinks(x,Linkify.WEB_URLS);
+
+        m.sendTextMessage(phoneNumber, null,messageText +"\n"+ x.getText(), null, null);
     }
 
     /**
@@ -417,7 +563,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         }
         polygon = new Polygon(map);
 
-        polygon.setFillColor(Color.argb(50, 255,0,0));
+        polygon.setFillColor(Color.argb(70, 0,0,255));
         geoPoints.add(geoPoints.get(0));    //forces the loop to close
         polygon.setPoints(geoPoints);
         //polygon.setTitle("AnkerArea");
@@ -456,9 +602,10 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         double test = actualGeoPoint.distanceToAsDouble(startGeoPoint);
         double testact = actualGeoPoint.getLatitude();
         double teststart = startGeoPoint.getLatitude();
-        Toast.makeText(getBaseContext(), toString().valueOf(test)+" "+toString().valueOf(testact)+" "+toString().valueOf(teststart), Toast.LENGTH_LONG).show();
+        //Toast.makeText(getBaseContext(), toString().valueOf(test)+" \n"+toString().valueOf(testact)+" \n"+toString().valueOf(teststart), Toast.LENGTH_SHORT).show();
         if (actualGeoPoint.distanceToAsDouble(startGeoPoint) > radius) {
-            Toast.makeText(getBaseContext(), "ausserhalb", Toast.LENGTH_LONG).show();
+            //Toast.makeText(getBaseContext(), "ausserhalb", Toast.LENGTH_SHORT).show();
+
             return false;
         } else {
             isSMSalreadySend = false;
@@ -480,6 +627,9 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         //marker.setTitle("Give it a title");
         map.getOverlays().add(marker);
         map.invalidate();
+
+        markers.add(center);
+        //markerLatitude.add(marker.getPosition().getLatitude());
     }
 
     /**
@@ -527,7 +677,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         polygon.setStrokeWidth((float)5.0);
         map.getOverlays().add(polygon);
         //map.invalidate();
-        Toast.makeText(getBaseContext(),"New Radius Set", Toast.LENGTH_LONG).show();
+        Toast.makeText(getBaseContext(),"New Radius Set", Toast.LENGTH_SHORT).show();
         //startGeoPoint = p;
         //addMarker(startGeoPoint);
     }
@@ -545,7 +695,9 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         //inputRadius.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         smsInput = (EditText) dialog.findViewById(R.id.smsInput);     //dialog muss gegeben sein, weil sonst der View nicht klar ist und es in eine null object reference läuft
         //https://blog.codeonion.com/2015/10/03/android-how-to-fix-null-object-reference-error/
+        smsInput.setText(phoneNumber);
         messageInput = (EditText) dialog.findViewById(R.id.smsMessageInput);
+        messageInput.setText(messageText);
         okButton = dialog.findViewById(R.id.okButton2);
         okButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -556,10 +708,32 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                 } else {
                     phoneNumber = smsInput.getText().toString();
                     messageText = messageInput.getText().toString();
+                    editor.putString("phoneNumber", phoneNumber);
+                    editor.putString("messageText", messageText);
+                    editor.commit();
                     Toast.makeText(getApplicationContext(),String.valueOf(phoneNumber), Toast.LENGTH_SHORT).show();
-                    sendSMS();
+                    //sendSMS();
                     dialog.dismiss();
                 }
+            }
+        });
+        dialog.show();
+    }
+
+    public void openAlertDialog(final Context context) {
+        final Dialog dialog = new Dialog(context);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(R.layout.alertlayout);
+
+        final MediaPlayer mp = MediaPlayer.create(ctx, R.raw.horn);
+        mp.start();
+
+        okButton = dialog.findViewById(R.id.okButton3);
+        okButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                mp.stop();
+                dialog.dismiss();
             }
         });
         dialog.show();
@@ -594,6 +768,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                 openRadiusDialog(ctx);
                 return true;
             case R.id.resetPosition:
+                resetOverlays();
                 return true;
             case R.id.personalInfo:
                 openPersonalDialog(ctx);

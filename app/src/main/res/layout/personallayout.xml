@@ -37,6 +37,7 @@
         android:text="Please Enter The Massage Text:"
         android:layout_gravity="center" />
 
+
     <EditText
         android:id="@+id/smsMessageInput"
         android:layout_width="match_parent"

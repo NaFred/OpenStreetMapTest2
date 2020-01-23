@@ -5,7 +5,7 @@
     <item
         android:id="@+id/position"
         android:checkable="false"
-        android:icon="@android:drawable/radiobutton_off_background"
+        android:icon="@android:drawable/ic_menu_compass"
         android:title="SET Position"
         app:showAsAction="always" />
     <item
