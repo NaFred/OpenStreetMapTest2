@@ -34,21 +34,16 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
-
 import org.osmdroid.api.IMapController;
-
-import org.osmdroid.events.MapEventsReceiver;
-
-import org.osmdroid.views.overlay.MapEventsOverlay;
-import org.osmdroid.views.overlay.Marker;
 import org.osmdroid.config.Configuration;
+import org.osmdroid.events.MapEventsReceiver;
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
 import org.osmdroid.util.GeoPoint;
 import org.osmdroid.views.MapView;
-
+import org.osmdroid.views.overlay.MapEventsOverlay;
+import org.osmdroid.views.overlay.Marker;
 import org.osmdroid.views.overlay.Polygon;
 import org.osmdroid.views.overlay.ScaleBarOverlay;
-
 import org.osmdroid.views.overlay.compass.CompassOverlay;
 import org.osmdroid.views.overlay.compass.InternalCompassOrientationProvider;
 import org.osmdroid.views.overlay.gestures.RotationGestureOverlay;
@@ -61,11 +56,12 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Vector;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
+import com.example.openstreetmaptest.SerializableManager;
 
 /**
  * @brief The "Ankerwache" app is used to capture the position of the mobile device using openstreetmap.
@@ -77,12 +73,11 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     MapView map = null;
     private IMapController iMapController;
 
-
     //your items for polygon
     List<GeoPoint> geoPoints = new ArrayList<>();
     List<GeoPoint> points = new ArrayList<>();
     private float radius = 0;
-    private boolean isSMSalreadySend = false;
+    private boolean commingFromOutside = false;
 
     //gps location
     private LocationManager locManager;
@@ -103,12 +98,6 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     ScaleBarOverlay mScaleBarOverlay;
     CompassOverlay mCompassOverlay;
 
-
-    Location currentLocation;
-    private double longitude = 0;
-    private double latitude = 0;
-
-    private LinearLayout radiusdialog;
     private EditText inputRadius;
     private EditText smsInput;
     private EditText messageInput;
@@ -121,17 +110,15 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     //private String phoneNumber = "017650182055";
     private String messageText = "Your Ship Is Out Of Range!";
 
-    private Vector<GeoPoint> markers = new Vector<GeoPoint>();
-    //private Vector<Double> markerLatitude = new Vector<Double>();
-
     private boolean isFirstStart = true;
     //declare shared preference and editor
     SharedPreferences pref;
     SharedPreferences.Editor editor;
-    //private Location location;
+    private MapEventsReceiver mReceive;
+
 
     /**
-     * @brief This method creates the map and initializes the values for displaying positions. The map is build up with a scalebar, roatation feature, zoom feature, a moving position target
+     * @brief This method creates the map and initializes the values for displaying positions. The map is build up with a scalebar, rotation feature, zoom feature, a moving position target
      * and a location listener.
      * @param savedInstanceState
      */
@@ -191,59 +178,22 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         mCompassOverlay.enableCompass();
 
 
-        //init location
-        //currentLocation.setLatitude(actualGeoPoint.getLatitude());
-        //currentLocation.setLongitude(actualGeoPoint.getLongitude());
+        actualGeoPoint.setLongitude(1.0);
+        actualGeoPoint.setLatitude(1.0);
 
+        if(savedInstanceState != null) {
+            actualGeoPoint.setLatitude(savedInstanceState.getDouble("actualLatitude"));
+            actualGeoPoint.setLongitude(savedInstanceState.getDouble("actualLongitude"));
+            startGeoPoint.setLatitude(savedInstanceState.getDouble("startLatitude"));
+            startGeoPoint.setLongitude(savedInstanceState.getDouble("startLongitude"));
+            addMarker(startGeoPoint);
+            radius = savedInstanceState.getFloat("radius");
+            commingFromOutside = savedInstanceState.getBoolean("commingFromOutside");
+            phoneNumber = savedInstanceState.getString("phoneNumber");
+            //isFirstStart = savedInstanceState.getBoolean("isFirstStart");
+            locManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        }
 
-        //LocationListener erstellen
-        //if(location != null) {
-            //location = getLastBestLocation();
-
-            //actualGeoPoint.setLongitude(location.getLongitude());
-           // actualGeoPoint.setLatitude(location.getLatitude());
-            //startGeoPoint.setLongitude(location.getLongitude());
-            //startGeoPoint.setLatitude(location.getLatitude());
-        //}else{
-            //location = getLastBestLocation();
-        //map.getOverlays().clear();  //init
-
-            actualGeoPoint.setLongitude(1.0);
-            actualGeoPoint.setLatitude(1.0);
-
-            if(savedInstanceState != null) {
-                actualGeoPoint.setLatitude(savedInstanceState.getDouble("actualLatitude"));
-                actualGeoPoint.setLongitude(savedInstanceState.getDouble("actualLongitude"));
-                startGeoPoint.setLatitude(savedInstanceState.getDouble("startLatitude"));
-                startGeoPoint.setLongitude(savedInstanceState.getDouble("startLongitude"));
-                radius = savedInstanceState.getFloat("radius");
-                isSMSalreadySend = savedInstanceState.getBoolean("isSMSalreadySend");
-                phoneNumber = savedInstanceState.getString("phoneNumber");
-
-
-                try {
-                    FileInputStream fileInputStream = ctx.openFileInput("test2");
-                    ObjectInputStream objectInputStream = new ObjectInputStream(fileInputStream);
-
-                    Vector<GeoPoint> list = (Vector<GeoPoint>)objectInputStream.readObject();
-                    for(int i =0;i<list.size();i++) {
-                        //marker = new Marker(map);
-                        addMarker(list.get(i));
-                    }
-
-
-                    objectInputStream.close();
-                    fileInputStream.close();
-                } catch (IOException | ClassNotFoundException e) {
-                    e.printStackTrace();
-                }
-            }
-            //actualGeoPoint.setLongitude(location.getLongitude());
-            //actualGeoPoint.setLatitude(location.getLatitude());
-
-        //}
-        //set the view of the map at start
-        //setStartView(startGeoPoint,18.0);              //TODO start view
 
         locListener = new LocationListener() {
 
@@ -251,35 +201,22 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
             //when location changed (gps)
             public void onLocationChanged(Location location) {
 
-                //if (location != null) {
-                    //Create GeoPoint
-                    //actualGeoPoint = new GeoPoint(location.getLatitude(),location.getLongitude());
                     actualGeoPoint.setLongitude(location.getLongitude());
                     actualGeoPoint.setLatitude(location.getLatitude());
-                if(isFirstStart == true){
-                    centerMap();
-                    //openPersonalDialog(ctx);
-                    editor.putBoolean("firstStart",false);
-                    editor.commit();
-                    isFirstStart = false;
-                }
+
+                    if (isFirstStart == true) {
+                        centerMap();
+                        //openPersonalDialog(ctx);
+                        editor.putBoolean("firstStart", false);
+                        editor.commit();
+                        isFirstStart = false;
+                    }
 
                     if (radius > 0) {
-                        addMarker(actualGeoPoint);          //uncomment for continious tracking
-                        //Toast.makeText(getBaseContext(), String.valueOf(radius), Toast.LENGTH_LONG).show();
                         geoPointInRadius();
-                        if (geoPointInRadius() == false && isSMSalreadySend == false) {
-                            //sendSMS();
-                            openAlertDialog(ctx);
-                            isSMSalreadySend = true;
-                        }
                     }
-                //} else {
-                //    location = getLastBestLocation();
-                //    actualGeoPoint.setLongitude(location.getLongitude());
-                //    actualGeoPoint.setLatitude(location.getLatitude());
-                //}
             }
+
 
             @Override
             public void onStatusChanged(String provider, int status, Bundle extras) {
@@ -326,12 +263,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         }
         getGPS();
 
-
-        //map.getOverlays().add(polygon);
-        //addMarker(hochschule);
-        //map.invalidate();
-
-        final MapEventsReceiver mReceive = new MapEventsReceiver() {
+        mReceive = new MapEventsReceiver() {
             @Override
             public boolean singleTapConfirmedHelper(GeoPoint p) {
                 return false;
@@ -340,7 +272,8 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
             @Override
             public boolean longPressHelper(GeoPoint p) {
                 radius = (float) p.distanceToAsDouble(actualGeoPoint);
-                startGeoPoint = mLocationOverlay.getMyLocation();
+                startGeoPoint =mLocationOverlay.getMyLocation();
+                map.getOverlays().remove(marker);
                 addMarker(startGeoPoint);
                 updateCircle(startGeoPoint, radius, map);
                 return false;
@@ -349,7 +282,6 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
 
         map.getOverlays().add(new MapEventsOverlay(mReceive));
         map.getOverlays().add(polygon);
-        //map.invalidate();
     }
 
     /**
@@ -409,70 +341,22 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         savedInstanceState.putDouble("startLatitude", startLatitude);
         savedInstanceState.putDouble("startLongitude", startLongitude);
         savedInstanceState.putFloat("radius", radius);
-        savedInstanceState.putBoolean("isSMSalreadySend", isSMSalreadySend);
+        savedInstanceState.putBoolean("commingFromOutside", commingFromOutside);
         savedInstanceState.putString("phoneNumber",phoneNumber);
+        //savedInstanceState.putBoolean("isFirstStart",isFirstStart);
+        locManager.removeUpdates(locListener);
 
-        //savedInstanceState.putDoubleArray("markerLongitude", []markerLongitude);
-        String fileName = "test2";
-        try {
-            FileOutputStream fos = ctx.openFileOutput(fileName, Context.MODE_PRIVATE);
-            ObjectOutputStream os = new ObjectOutputStream(fos);
-            os.writeObject(markers);
-            os.close();
-            fos.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+
     }
 
-    /**
-     * @brief This function returns the best last known location of the mobile device by gps or network provider.
-     * @return the last known best location
-     */
-    private Location getLastBestLocation() {
-        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                //request permissions with code 10
-                requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION,Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.INTERNET}
-                        ,30);
-            }
-        }
-        Location locationGPS = locManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-        Location locationNet = locManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-
-        long GPSLocationTime = 0;
-        if (null != locationGPS) {
-            GPSLocationTime = locationGPS.getTime();
-        }
-
-        long NetLocationTime = 0;
-
-        if (null != locationNet) {
-            NetLocationTime = locationNet.getTime();
-        }
-
-        if (0 < GPSLocationTime - NetLocationTime) {
-            return locationGPS;
-        } else {
-            return locationNet;
-        }
-    }
 
     private void resetOverlays(){
-        int count =0;
-        for(int i = 0;i<map.getOverlays().size();i++)
-        {
-
-            if(map.getOverlays().get(i) instanceof Marker) {
-                map.getOverlays().remove(marker);
-                count++;
-            }
-            // if(map.getOverlays().get(i)==marker){
-           //     map.getOverlays().remove(marker);
-           // }
-        }
-        Toast.makeText(getBaseContext(), String.valueOf(count), Toast.LENGTH_LONG).show();
-        map.invalidate();
+        map.getOverlays().clear();
+        map.getOverlays().add(mLocationOverlay);
+        map.getOverlays().add(mCompassOverlay);
+        map.getOverlays().add(mRotationGestureOverlay);
+        map.getOverlays().add(mScaleBarOverlay);
+        map.getOverlays().add(new MapEventsOverlay(mReceive));
     }
 
 
@@ -490,9 +374,6 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                 break;
             case 20:
                 sendSMS();
-                break;
-            case 30:
-                getLastBestLocation();
                 break;
             default:
                 break;
@@ -517,7 +398,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         // this code won't execute IF permissions are not allowed, because in the line above there is return statement.
         //Init Geopoint with current gps location
         //actualGeoPoint = mLocationOverlay.getMyLocation();
-        locManager.requestLocationUpdates("gps", 5000, 0, locListener);
+        locManager.requestLocationUpdates("gps", 5000, 10, locListener);
     }
 
     /**
@@ -599,18 +480,17 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
      * @return true for being into the radius, else false
      */
     public boolean geoPointInRadius(){
-        double test = actualGeoPoint.distanceToAsDouble(startGeoPoint);
-        double testact = actualGeoPoint.getLatitude();
-        double teststart = startGeoPoint.getLatitude();
-        //Toast.makeText(getBaseContext(), toString().valueOf(test)+" \n"+toString().valueOf(testact)+" \n"+toString().valueOf(teststart), Toast.LENGTH_SHORT).show();
-        if (actualGeoPoint.distanceToAsDouble(startGeoPoint) > radius) {
+        if (startGeoPoint.distanceToAsDouble(actualGeoPoint) > radius) {
+            if(commingFromOutside == false) {
+                openAlertDialog(ctx);
+                //sendSMS();
+            }
+            commingFromOutside = true;
             //Toast.makeText(getBaseContext(), "ausserhalb", Toast.LENGTH_SHORT).show();
-
             return false;
         } else {
-            isSMSalreadySend = false;
+            commingFromOutside = false;
             //Toast.makeText(getBaseContext(), "innerhalb", Toast.LENGTH_LONG).show();
-            //Toast.makeText(getBaseContext(), String.valueOf(actualGeoPoint.getLatitude()), Toast.LENGTH_LONG).show();
             return true;
         }
 
@@ -627,9 +507,6 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         //marker.setTitle("Give it a title");
         map.getOverlays().add(marker);
         map.invalidate();
-
-        markers.add(center);
-        //markerLatitude.add(marker.getPosition().getLatitude());
     }
 
     /**
@@ -655,8 +532,10 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                 } else {
                     radius = Float.parseFloat(inputRadius.getText().toString());
                     Toast.makeText(getApplicationContext(),String.valueOf(radius), Toast.LENGTH_SHORT).show();
-
-                    updateCircle(actualGeoPoint, radius, map);
+                    startGeoPoint = mLocationOverlay.getMyLocation();
+                    map.getOverlays().remove(marker);
+                    addMarker(startGeoPoint);
+                    updateCircle(startGeoPoint, radius, map);
                     dialog.dismiss();
                 }
             }
@@ -672,14 +551,12 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
      */
     public void updateCircle(GeoPoint p, float radius, MapView map){
         map.getOverlays().remove(polygon);
-        map.getOverlays().remove(marker);
         polygon = makeCircle(p,radius,map);
         polygon.setStrokeWidth((float)5.0);
         map.getOverlays().add(polygon);
-        //map.invalidate();
+        map.invalidate();
+        commingFromOutside = false;
         Toast.makeText(getBaseContext(),"New Radius Set", Toast.LENGTH_SHORT).show();
-        //startGeoPoint = p;
-        //addMarker(startGeoPoint);
     }
 
     /**
