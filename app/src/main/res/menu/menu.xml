@@ -17,4 +17,7 @@
     <item
         android:id="@+id/personalInfo"
         android:title="Personal Info" />
+    <item
+        android:id="@+id/about"
+        android:title="About" />
 </menu>
