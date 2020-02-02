@@ -13,7 +13,7 @@
         android:title="Set Radius" />
     <item
         android:id="@+id/resetPosition"
-        android:title="Reset Positions" />
+        android:title="Reset All" />
     <item
         android:id="@+id/personalInfo"
         android:title="Personal Info" />

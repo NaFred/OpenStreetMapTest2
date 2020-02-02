@@ -11,7 +11,6 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.media.MediaPlayer;
-import android.net.Uri;
 import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -37,7 +36,6 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
-import org.osmdroid.api.IGeoPoint;
 import org.osmdroid.api.IMapController;
 import org.osmdroid.config.Configuration;
 import org.osmdroid.events.MapEventsReceiver;
@@ -58,6 +56,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import com.example.openstreetmaptest.Mail;
 /**
  * @brief The "Ankerwache" app is used to capture the position of the mobile device using openstreetmap.
  * To do this, a radius around the given position is defined by clicking on the map or using a menu. If this is left, a warning is sent to a second device via SMS.
@@ -126,7 +125,8 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
 
     private double zoom = 18.0;
 
-
+    private int smsCounter = 0;
+    private static int smsMax = 5;
 
 
 
@@ -150,6 +150,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         }
         if(pref.contains("messageText")){
             messageText = pref.getString("messageText", "Your Ship Is Out Of Range!");
+            emailBody = messageText;
         }
         if(pref.contains("firstStart")){
             //read out value if it was saved before
@@ -227,6 +228,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
             zoom = savedInstanceState.getDouble("zoom");
             isSMSChosen = savedInstanceState.getBoolean("smsChosen");
             isEmailChosen = savedInstanceState.getBoolean("emailChosen");
+            smsCounter = savedInstanceState.getInt("smsCounter");
         }
 
 
@@ -242,6 +244,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
 
                 //mLocationOverlay.enableFollowLocation();
                 //iMapController.animateTo((IGeoPoint)actualGeoPoint);
+                map.invalidate();
 
 
                 if (isFirstStart == true) {
@@ -440,6 +443,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
 
         savedInstanceState.putBoolean("smsChosen",isSMSChosen);
         savedInstanceState.putBoolean("emailChosen",isEmailChosen);
+        savedInstanceState.putInt("smsCounter",smsCounter);
 
     }
 
@@ -524,13 +528,15 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         //x.setText("http://maps.google.com/maps?q="+actualGeoPoint.getLatitude()+","+actualGeoPoint.getLongitude());
 
         x.setText("http://www.openstreetmap.org/?mlat=" + actualGeoPoint.getLatitude() + "&mlon=" + actualGeoPoint.getLongitude()+"&zoom=14&layers=M");
-        Pattern pattern = Pattern.compile(".*", Pattern.DOTALL);
+        //Pattern pattern = Pattern.compile(".*", Pattern.DOTALL);
 
         //Linkify.addLinks(x, pattern, "http://maps.google.com/maps?q="+actualGeoPoint.getLatitude()+","+actualGeoPoint.getLongitude());
         Linkify.addLinks(x,Linkify.WEB_URLS);
 
-
-        m.sendTextMessage(phoneNumber, null, messageText + "\n" + x.getText(), null, null);
+        if(smsCounter<smsMax) {
+            m.sendTextMessage(phoneNumber, null, messageText + "\n" + x.getText(), null, null);
+            smsCounter++;
+        }
     }
 
     /**
@@ -739,6 +745,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                     } else {
                         phoneNumber = smsInput.getText().toString();
                         messageText = messageInput.getText().toString();
+                        emailBody = messageText;
                         editor.putString("phoneNumber", phoneNumber);
                         editor.putString("messageText", messageText);
                         isSMSChosen = true;
@@ -758,6 +765,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                                 }else{
                                     sendTo = emailInput.getText().toString();
                                     messageText = messageInput.getText().toString();
+                                    emailBody = messageText;
                                     editor.putString("email", sendTo);
                                     editor.putString("messageText", messageText);
                                     isEmailChosen = true;
@@ -786,6 +794,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                         } else {
                             sendTo = emailInput.getText().toString();
                             messageText = messageInput.getText().toString();
+                            emailBody = messageText;
                             editor.putString("email", sendTo);
                             editor.putString("messageText", messageText);
                             isEmailChosen = true;
@@ -882,19 +891,20 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         switch (item.getItemId()) {
             case R.id.position:
                 centerMap();
-
+                /*                                                          ////////////////////////////////////////TESTAUSGABEN TODO
                 if(isSMSChosen){
                     sendSMS();
                 }
                 if(isEmailChosen){
                     sendEmail();
                 }
-
+                */
                 return true;
             case R.id.radius:
                 openRadiusDialog(ctx);
                 return true;
             case R.id.resetPosition:
+                smsCounter = 0;
                 resetOverlays();
                 return true;
             case R.id.personalInfo:
@@ -908,14 +918,28 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         }
     }
 
+    /*
     public void sendEmail(){
         String subject = "Your Ship is out of Range!";
         String mailTo = "mailto:" + sendTo +
                 "?&subject=" + Uri.encode(subject) +
                 "&body=" + Uri.encode(emailBody);
-        Intent emailIntent = new Intent(Intent.ACTION_VIEW);
+        Intent emailIntent = new Intent(Intent.ACTION_SENDTO);
         emailIntent.setType("message/rfc822");
         emailIntent.setData(Uri.parse(mailTo));
         startActivity(emailIntent);
     }
+    */
+
+    /**
+     * @brief This function starts an AsyncTask for sending an email to an given mail address.
+     */
+    public  void sendEmail(){
+        TextView text = new TextView(ctx);
+        text.setText("http://www.openstreetmap.org/?mlat=" + actualGeoPoint.getLatitude() + "&mlon=" + actualGeoPoint.getLongitude()+"&zoom=14&layers=M");
+        Linkify.addLinks(text,Linkify.WEB_URLS);
+        Mail m = new Mail(ctx,sendTo,"Your Ship Is Out Of Range!",emailBody + "\n" + text.getText());
+        m.execute();
+    }
+
 }

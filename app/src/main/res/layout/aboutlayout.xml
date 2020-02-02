@@ -48,7 +48,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
-        android:text="With this app You can check weather Your Boat/Ship is out off a cirtain radius. The app display a warning window and sends a SMS to a phone number."
+        android:text="With this app You can check weather Your Boat/Ship is out off a cirtain radius. The app displays a warning window and sends SMS and/or email to the user."
         android:textAlignment="center"
         android:textColor="#FFFFFF"
         android:textSize="15sp" />
@@ -58,7 +58,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
-        android:text="On very first startup, you have to enter Your phone number an press on 'OK'. This can be edited in the menu withe the item 'Personal Info'. In the menu you can also clear all positions and reset the map. Your private data is been handled with care and not given to third parties."
+        android:text="On very first startup, you have to enter Your phone number/email address and press 'OK'. This can be edited in the menu with the item 'Personal Info'. In the menu you can also clear all positions and reset the map. Your private data is handled with care and not given to third parties."
         android:textAlignment="center"
         android:textColor="#FFFFFF"
         android:textSize="15sp" />
