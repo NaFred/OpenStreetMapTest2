@@ -2,7 +2,6 @@ package com.example.openstreetmaptest;
 
 import android.app.ProgressDialog;
 import android.content.Context;
-import android.media.audiofx.DynamicsProcessing;
 import android.os.AsyncTask;
 import android.widget.Toast;
 import java.util.Properties;
@@ -14,10 +13,10 @@ import javax.mail.Transport;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMessage;
 
+/**
+ * @brief This class describes an AsyncTask to send an email
+ */
 public class Mail extends AsyncTask<Void,Void,Void>  {
-
-
-    //Need INTERNET permission
 
     //Variables
     private Context mContext;
@@ -29,7 +28,13 @@ public class Mail extends AsyncTask<Void,Void,Void>  {
 
     private ProgressDialog mProgressDialog;
 
-    //Constructor
+    /**
+     * @brief Constructor for the Object Mail
+     * @param mContext The app
+     * @param mEmail The address
+     * @param mSubject  The mail subject
+     * @param mMessage  The message of the mail
+     */
     public Mail(Context mContext, String mEmail, String mSubject, String mMessage) {
         this.mContext = mContext;
         this.mEmail = mEmail;
@@ -37,6 +42,9 @@ public class Mail extends AsyncTask<Void,Void,Void>  {
         this.mMessage = mMessage;
     }
 
+    /**
+     * @brief This function is executed before the Async Main Task is executed
+     */
     @Override
     protected void onPreExecute() {
         super.onPreExecute();
@@ -44,6 +52,10 @@ public class Mail extends AsyncTask<Void,Void,Void>  {
         mProgressDialog = ProgressDialog.show(mContext,"Sending message", "Please wait...",false,false);
     }
 
+    /**
+     * @brief This function is executed after the main task of the Async Task is executed
+     * @param aVoid
+     */
     @Override
     protected void onPostExecute(Void aVoid) {
         super.onPostExecute(aVoid);
@@ -54,13 +66,17 @@ public class Mail extends AsyncTask<Void,Void,Void>  {
         Toast.makeText(mContext,"Message Sent",Toast.LENGTH_SHORT).show();
     }
 
+    /**
+     * @brief This task is the Main AsyncTask
+     * @param params
+     * @return
+     */
     @Override
     protected Void doInBackground(Void... params) {
         //Creating properties
         Properties props = new Properties();
 
         //Configuring properties for gmail
-        //If you are not using gmail you may need to change the values
         props.put("mail.smtp.host", "smtp.web.de");
         props.put("mail.smtp.socketFactory.port", "587");
         //props.put("mail.smtp.socketFactory.class", "javax.net.tls.TLSSocketFactory");
@@ -74,7 +90,7 @@ public class Mail extends AsyncTask<Void,Void,Void>  {
                 new javax.mail.Authenticator() {
                     //Authenticating the password
                     protected PasswordAuthentication getPasswordAuthentication() {
-                        return new PasswordAuthentication("NaFred.eit@web.de", "hochschule");
+                        return new PasswordAuthentication("NaFred.eit@web.de", "hochschule"); //login information
                     }
                 });
 
@@ -92,26 +108,6 @@ public class Mail extends AsyncTask<Void,Void,Void>  {
             mm.setText(mMessage);
             //Sending email
             Transport.send(mm);
-
-//            BodyPart messageBodyPart = new MimeBodyPart();
-//
-//            messageBodyPart.setText(message);
-//
-//            Multipart multipart = new MimeMultipart();
-//
-//            multipart.addBodyPart(messageBodyPart);
-//
-//            messageBodyPart = new MimeBodyPart();
-//
-//            DataSource source = new FileDataSource(filePath);
-//
-//            messageBodyPart.setDataHandler(new DataHandler(source));
-//
-//            messageBodyPart.setFileName(filePath);
-//
-//            multipart.addBodyPart(messageBodyPart);
-
-//            mm.setContent(multipart);
 
         } catch (MessagingException e) {
             e.printStackTrace();

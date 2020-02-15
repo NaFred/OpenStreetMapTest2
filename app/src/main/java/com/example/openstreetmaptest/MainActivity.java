@@ -19,7 +19,6 @@ import android.provider.Settings;
 import android.telephony.SmsManager;
 import android.text.util.Linkify;
 import android.util.DisplayMetrics;
-import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -54,9 +53,6 @@ import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Pattern;
-
-import com.example.openstreetmaptest.Mail;
 /**
  * @brief The "Ankerwache" app is used to capture the position of the mobile device using openstreetmap.
  * To do this, a radius around the given position is defined by clicking on the map or using a menu. If this is left, a warning is sent to a second device via SMS.
@@ -91,6 +87,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     ScaleBarOverlay mScaleBarOverlay;
     CompassOverlay mCompassOverlay;
 
+    //textfields for user input
     private EditText inputRadius;
     private EditText smsInput;
     private EditText messageInput;
@@ -101,18 +98,17 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
 
     final SmsManager m = SmsManager.getDefault();
     private String phoneNumber = "+15555215554";        //phone number for testing with the simulator
-    //private String phoneNumber = "017650182055";
     private String messageText = "Your Ship Is Out Of Range!";
     private String messageTextBat = "AnchorWatch: The Battery Level Of Your Phone Is Low!";
 
-    String sendTo = "NaFred.eit@web.de";
+    String sendTo = "NaFred.eit@web.de";    //email receiver
     String emailBody = "Hi I am test body";
 
-    private boolean isFirstStart = true;
+    private boolean isFirstStart = true;    //check for the very first start
     //declare shared preference and editor
     SharedPreferences pref;
     SharedPreferences.Editor editor;
-    private MapEventsReceiver mReceive;
+    private MapEventsReceiver mReceive; //touch event
 
     private boolean isRadiusWindowOpen = false;
     private boolean isPersonalWindowOpen = false;
@@ -123,6 +119,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     private boolean isSMSChosen = false;
     private boolean isEmailChosen = false;
 
+    //map zoom level
     private double zoom = 18.0;
 
     private int smsCounter = 0;
@@ -145,6 +142,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         pref = getApplicationContext().getSharedPreferences("myPref",MODE_PRIVATE);
         editor = pref.edit();
 
+        //read out infos from shared pref
         if(pref.contains("phoneNumber")){
             phoneNumber = pref.getString("phoneNumber", "0123456789");
         }
@@ -191,12 +189,14 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         //mLocationOverlay.setPersonIcon();
         mLocationOverlay.enableMyLocation();
 
+        //add compass
         mCompassOverlay = new CompassOverlay(ctx, new InternalCompassOrientationProvider(ctx), map);
         mCompassOverlay.enableCompass();
 
         actualGeoPoint.setLongitude(1.0);
         actualGeoPoint.setLatitude(1.0);
 
+        //get values from savedInstance state if there are any
         if(savedInstanceState != null) {
             actualGeoPoint.setLatitude(savedInstanceState.getDouble("actualLatitude"));
             actualGeoPoint.setLongitude(savedInstanceState.getDouble("actualLongitude"));
@@ -204,6 +204,8 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
             startGeoPoint.setLongitude(savedInstanceState.getDouble("startLongitude"));
             addMarker(startGeoPoint);
             radius = savedInstanceState.getFloat("radius");
+
+
             commingFromOutside = savedInstanceState.getBoolean("commingFromOutside");
             phoneNumber = savedInstanceState.getString("phoneNumber");
 
@@ -231,9 +233,8 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
             smsCounter = savedInstanceState.getInt("smsCounter");
         }
 
-
+        //wait for location change
         locListener = new LocationListener() {
-
             @Override
             //when location changed (gps)
             public void onLocationChanged(Location location) {
@@ -241,16 +242,16 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                 actualGeoPoint.setLongitude(location.getLongitude());
                 actualGeoPoint.setLatitude(location.getLatitude());
 
-
                 //mLocationOverlay.enableFollowLocation();
                 //iMapController.animateTo((IGeoPoint)actualGeoPoint);
-                map.invalidate();
+                map.invalidate();   //refresh
 
-
+                //on very first startup after installation
                 if (isFirstStart == true) {
                     centerMap();
                     isFirstStart = false;
                 }
+                //check battery on every location change
                 BatteryManager bm = (BatteryManager)getSystemService(BATTERY_SERVICE);
                 int batLevel = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
                 if(batLevel < 16 && isBatLowSMSsend == false){
@@ -289,6 +290,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         polygon = makeCircle(startGeoPoint, radius, map);
         polygon.setStrokeWidth((float) 5.0);
 
+        //add overlays
         map.getOverlays().add(mScaleBarOverlay);
         map.getOverlays().add(mRotationGestureOverlay);
         //add my location
@@ -298,33 +300,33 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
 
 
         //set the view of the map at start
-        setStartView(actualGeoPoint, zoom);              //TODO start view
+        setStartView(actualGeoPoint, zoom);
 
-
-        //setStartView(actualGeoPoint, 18.0);              //TODO start view
         //iMapController.animateTo((IGeoPoint)actualGeoPoint);
 
         map.invalidate();
+        //on very first startup after installation
         if(isFirstStart == true){
             openPersonalDialog(ctx);
             openAboutDialog(ctx);
             editor.putBoolean("firstStart",false);
             editor.commit();
-            //setStartView(actualGeoPoint, 18.0);              //TODO start view
+            //setStartView(actualGeoPoint, 18.0);
         }
         //mLocationOverlay.enableFollowLocation();
         startGPSTracking();
-
+        //on touch event on the map
         mReceive = new MapEventsReceiver() {
             @Override
             public boolean singleTapConfirmedHelper(GeoPoint p) {
                 return false;
             }
 
+            //on long press
             @Override
             public boolean longPressHelper(GeoPoint p) {
-                radius = (float) p.distanceToAsDouble(actualGeoPoint);
-                startGeoPoint =mLocationOverlay.getMyLocation();
+                radius = (float) p.distanceToAsDouble(actualGeoPoint);  //get radius out of the click position
+                startGeoPoint =mLocationOverlay.getMyLocation();    //set start geopoint
                 map.getOverlays().remove(marker);
                 addMarker(startGeoPoint);
                 updateCircle(startGeoPoint, radius, map);
@@ -333,11 +335,15 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         };
 
         map.getOverlays().add(new MapEventsOverlay(mReceive));
-        //map.getOverlays().add(polygon);
+        map.getOverlays().add(polygon);
     }
 
+    /**
+     * @brief This function asks for location permissions on very first startup of the app.
+     * @return true if permissions given, else false
+     */
     private boolean askForPermissionOnStartup() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED){
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED){       //check for permissions
                 //&& ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             //when API >23
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -349,8 +355,13 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         }
         return true;
     }
+
+    /**
+     * @brief This function asks for sms permissions on very first startup of the app
+     * @return true if permissions given, else false
+     */
     private boolean askForPermissionOnStartupZwei(){
-        if(ActivityCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED){
+        if(ActivityCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED){        //check for permissions
             //when API >23
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 //request permissions with code 50
@@ -382,9 +393,8 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         //scalebar
         final DisplayMetrics dm = ctx.getResources().getDisplayMetrics();
         mScaleBarOverlay = new ScaleBarOverlay(map);
-        mScaleBarOverlay.setCentred(true);
-        //play around with these values to get the location on screen in the right place for your application
-        mScaleBarOverlay.setScaleBarOffset(dm.widthPixels / 2, 10);
+        mScaleBarOverlay.setCentred(true); //center bar
+        mScaleBarOverlay.setScaleBarOffset(dm.widthPixels / 2, 10);     //top centered
     }
 
     /**
@@ -402,7 +412,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
      * @brief This function centers the map view to the actual position
      */
     public void centerMap(){
-        actualGeoPoint = mLocationOverlay.getMyLocation();
+        actualGeoPoint = mLocationOverlay.getMyLocation();      //get location from location overlay
         iMapController.setCenter(actualGeoPoint);
     }
 
@@ -413,17 +423,32 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     public void onSaveInstanceState(Bundle savedInstanceState) {
         super.onSaveInstanceState(savedInstanceState);
 
+        double actualLatitude = 0.0;
+        double actualLongitude = 0.0;
+
+        double startLatitude = 0.0;
+        double startLongitude = 0.0;
         //get GeoPoint
-        double actualLatitude = actualGeoPoint.getLatitude();
-        double actualLongitude = actualGeoPoint.getLongitude();
-        double startLatitude = startGeoPoint.getLatitude();
-        double startLongitude = startGeoPoint.getLongitude();
+        try {                           //catch nullpointer on first startup, when there is no gps change
+            actualLatitude = actualGeoPoint.getLatitude();
+            actualLongitude = actualGeoPoint.getLongitude();
+        }catch(NullPointerException e){
+            actualLongitude = 1.0;
+            actualLatitude = 1.0;
+        }
+        try {
+            startLatitude = startGeoPoint.getLatitude();
+            startLongitude = startGeoPoint.getLongitude();
+        }catch(NullPointerException e){
+            startLatitude = 1.0;
+            startLongitude = 1.0;
+        }
 
         zoom = map.getZoomLevelDouble();
 
 
         map.invalidate();
-        //save Geopoint
+        //save Geopoints and variables
         savedInstanceState.putDouble("actualLatitude", actualLatitude);
         savedInstanceState.putDouble("actualLongitude", actualLongitude);
         savedInstanceState.putDouble("startLatitude", startLatitude);
@@ -444,14 +469,13 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         savedInstanceState.putBoolean("smsChosen",isSMSChosen);
         savedInstanceState.putBoolean("emailChosen",isEmailChosen);
         savedInstanceState.putInt("smsCounter",smsCounter);
-
     }
 
     /**
      * @brief This function resets the overlays of the map. All overlays are cleared and then added again with initial values.
      */
     private void resetOverlays(){
-        map.getOverlays().clear();
+        map.getOverlays().clear();  //clear all
         map.getOverlays().add(mLocationOverlay);
         map.getOverlays().add(mCompassOverlay);
         map.getOverlays().add(mRotationGestureOverlay);
@@ -466,6 +490,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
      * @param permissions The name of the permission as a string
      * @param grantResults The state of the permission result (permission granted, not granted) as an array of integers
      */
+    //permission handling
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         switch (requestCode){
@@ -479,10 +504,10 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                 sendBatSMS();
                 break;
             case 40:
-                askForPermissionOnStartup();
+                askForPermissionOnStartup();    //fist startup
                 break;
             case 50:
-                askForPermissionOnStartupZwei();
+                askForPermissionOnStartupZwei();    //first startup
                 break;
             default:
                 break;
@@ -504,10 +529,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
             //}
             return;
         }
-        // this code won't execute IF permissions are not allowed, because in the line above there is return statement.
-        //Init Geopoint with current gps location
-        //actualGeoPoint = mLocationOverlay.getMyLocation();
-        locManager.requestLocationUpdates("gps", 5000, 10, locListener);
+        locManager.requestLocationUpdates("gps", 5000, 5, locListener);        //request location every 5 seconds && the distance is more than 5 min
     }
 
     /**
@@ -527,14 +549,14 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         TextView x = new TextView(ctx);
         //x.setText("http://maps.google.com/maps?q="+actualGeoPoint.getLatitude()+","+actualGeoPoint.getLongitude());
 
-        x.setText("http://www.openstreetmap.org/?mlat=" + actualGeoPoint.getLatitude() + "&mlon=" + actualGeoPoint.getLongitude()+"&zoom=14&layers=M");
+        x.setText("http://www.openstreetmap.org/?mlat=" + actualGeoPoint.getLatitude() + "&mlon=" + actualGeoPoint.getLongitude()+"&zoom=14&layers=M");     //create link
         //Pattern pattern = Pattern.compile(".*", Pattern.DOTALL);
 
         //Linkify.addLinks(x, pattern, "http://maps.google.com/maps?q="+actualGeoPoint.getLatitude()+","+actualGeoPoint.getLongitude());
-        Linkify.addLinks(x,Linkify.WEB_URLS);
+        Linkify.addLinks(x,Linkify.WEB_URLS);       //set link
 
-        if(smsCounter<smsMax) {
-            m.sendTextMessage(phoneNumber, null, messageText + "\n" + x.getText(), null, null);
+        if(smsCounter<smsMax) {     //when smaller 5
+            m.sendTextMessage(phoneNumber, null, messageText + "\n" + x.getText(), null, null); //send SMS
             smsCounter++;
         }
     }
@@ -613,8 +635,8 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
      * @return true for being into the radius, else false
      */
     public boolean geoPointInRadius(){
-        if (startGeoPoint.distanceToAsDouble(actualGeoPoint) > radius) {
-            if(commingFromOutside == false) {
+        if (startGeoPoint.distanceToAsDouble(actualGeoPoint) > radius) {        //when outside
+            if(commingFromOutside == false) {       //check if comming from inside
                 openAlertDialog(ctx);
                 if(isSMSChosen){
                     sendSMS();
@@ -622,7 +644,6 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                 if(isEmailChosen){
                     sendEmail();
                 }
-
             }
             commingFromOutside = true;
             //Toast.makeText(getBaseContext(), "ausserhalb", Toast.LENGTH_SHORT).show();
@@ -632,7 +653,6 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
             //Toast.makeText(getBaseContext(), "innerhalb", Toast.LENGTH_LONG).show();
             return true;
         }
-
     }
 
     /**
@@ -642,7 +662,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     public void addMarker(GeoPoint center){
         marker = new Marker(map);
         marker.setPosition(center);
-        marker.setAnchor(Marker.ANCHOR_CENTER,Marker.ANCHOR_BOTTOM);
+        marker.setAnchor(Marker.ANCHOR_CENTER,Marker.ANCHOR_BOTTOM);    //fix marker to the map
         //marker.setTitle("Give it a title");
         map.getOverlays().add(marker);
         map.invalidate();
@@ -657,7 +677,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         final Dialog dialog = new Dialog(context);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setContentView(R.layout.radiusdialog);
-        dialog.setCanceledOnTouchOutside(false);
+        dialog.setCanceledOnTouchOutside(false);    //touch outside is forbidden
         isRadiusWindowOpen = true;
 
         //inputRadius.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
@@ -667,12 +687,12 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         okButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                if (inputRadius.getText().toString().isEmpty()) {
+                if (inputRadius.getText().toString().isEmpty()) {       //click without any given info
                     Toast.makeText(getApplicationContext(), "Fehler", Toast.LENGTH_SHORT).show();
                     isRadiusWindowOpen = false;
                     dialog.dismiss();
                 } else {
-                    radius = Float.parseFloat(inputRadius.getText().toString());
+                    radius = Float.parseFloat(inputRadius.getText().toString());    //set radius
                     Toast.makeText(getApplicationContext(),String.valueOf(radius), Toast.LENGTH_SHORT).show();
                     startGeoPoint = mLocationOverlay.getMyLocation();
                     map.getOverlays().remove(marker);
@@ -693,9 +713,9 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
      * @param map The map as a MapView
      */
     public void updateCircle(GeoPoint p, float radius, MapView map){
-        map.getOverlays().remove(polygon);
+        map.getOverlays().remove(polygon);  //remove old polygon
         polygon = makeCircle(p,radius,map);
-        polygon.setStrokeWidth((float)5.0);
+        polygon.setStrokeWidth((float)5.0); //thickness of the line
         map.getOverlays().add(polygon);
         map.invalidate();
         commingFromOutside = false;
@@ -711,7 +731,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         final Dialog dialog = new Dialog(context);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setContentView(R.layout.personallayout);
-        dialog.setCanceledOnTouchOutside(false);
+        dialog.setCanceledOnTouchOutside(false); //touch outside is forbidden
         isPersonalWindowOpen = true;
 
         //inputRadius.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
@@ -733,16 +753,16 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         okButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-
-                if(switch1.isChecked()) {                   //SMS ist an
-                    if (smsInput.getText().toString().isEmpty()) {
+                //check for SMS only, check for email only, check for both, check for none of them
+                if(switch1.isChecked()) {                   //SMS is on
+                    if (smsInput.getText().toString().isEmpty()) {  //nothing entered
                         Toast.makeText(getApplicationContext(), "No number entered!", Toast.LENGTH_SHORT).show();
                         isPersonalWindowOpen = false;
                         isSMSChosen = false;
                         editor.putBoolean("isSMSChosen", false);
                         editor.commit();
                         dialog.dismiss();
-                    } else {
+                    } else {        //sms is chosen
                         phoneNumber = smsInput.getText().toString();
                         messageText = messageInput.getText().toString();
                         emailBody = messageText;
@@ -754,15 +774,15 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                         editor.putBoolean("isEmailChosen", false);
                         editor.commit();
                         Toast.makeText(getApplicationContext(), String.valueOf(phoneNumber), Toast.LENGTH_SHORT).show();
-                            if(switch2.isChecked()){                //email ist ann
-                                if (emailInput.getText().toString().isEmpty()) {
+                            if(switch2.isChecked()){               //email is on too
+                                if (emailInput.getText().toString().isEmpty()) {    //no email entered
                                     Toast.makeText(getApplicationContext(), "No mail entered!", Toast.LENGTH_SHORT).show();
                                     isPersonalWindowOpen = false;
                                     isEmailChosen = false;
                                     editor.putBoolean("isEmailChosen", false);
                                     editor.commit();
                                     dialog.dismiss();
-                                }else{
+                                }else{  //both (sms & mail) are on
                                     sendTo = emailInput.getText().toString();
                                     messageText = messageInput.getText().toString();
                                     emailBody = messageText;
@@ -779,19 +799,19 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                         isPersonalWindowOpen = false;
                         dialog.dismiss();
                     }
-                }else{      //SMS ist aus
+                }else{      //SMS is off
                     isSMSChosen = false;
                     editor.putBoolean("isSMSChosen", false);
                     editor.commit();
-                    if(switch2.isChecked()) {       //Email ist an
-                        if (emailInput.getText().toString().isEmpty()) {
+                    if(switch2.isChecked()) {       //Email is on
+                        if (emailInput.getText().toString().isEmpty()) {        //nothing entered
                             Toast.makeText(getApplicationContext(), "No mail entered!", Toast.LENGTH_SHORT).show();
                             isPersonalWindowOpen = false;
                             isEmailChosen = false;
                             editor.putBoolean("isEmailChosen", false);
                             editor.commit();
                             dialog.dismiss();
-                        } else {
+                        } else {    //email on
                             sendTo = emailInput.getText().toString();
                             messageText = messageInput.getText().toString();
                             emailBody = messageText;
@@ -804,7 +824,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
                             editor.commit();
                             dialog.dismiss();
                         }
-                    }else {
+                    }else { //no email of sms
                         isEmailChosen = false;
                         editor.putBoolean("isSMSChosen", false);
                         editor.putBoolean("isEmailChosen", false);
@@ -827,17 +847,18 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         final Dialog dialog = new Dialog(context);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setContentView(R.layout.alertlayout);
-        dialog.setCanceledOnTouchOutside(false);
+        dialog.setCanceledOnTouchOutside(false); //touch outside is forbidden
         isAlertWindowOpen = true;
 
+        //media player to play a horn sound
         final MediaPlayer mp = MediaPlayer.create(ctx, R.raw.horn);
-        mp.start();
+        mp.start(); //play sound
 
         okButton = dialog.findViewById(R.id.okButton3);
         okButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                mp.stop();
+                mp.stop();  //stop playing the sound
                 isAlertWindowOpen = false;
                 dialog.dismiss();
             }
@@ -853,7 +874,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         final Dialog dialog = new Dialog(context);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setContentView(R.layout.aboutlayout);
-        dialog.setCanceledOnTouchOutside(false);
+        dialog.setCanceledOnTouchOutside(false);        //touch outside is forbidden
         isAboutWindowOpen = true;
 
         okButton = dialog.findViewById(R.id.okButton4);
@@ -876,7 +897,7 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         MenuInflater inflater = getMenuInflater();
-        inflater.inflate(R.menu.menu, menu);
+        inflater.inflate(R.menu.menu, menu);    //inflate manu
         return true;
     }
 
@@ -891,14 +912,6 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         switch (item.getItemId()) {
             case R.id.position:
                 centerMap();
-                /*                                                          ////////////////////////////////////////TESTAUSGABEN TODO
-                if(isSMSChosen){
-                    sendSMS();
-                }
-                if(isEmailChosen){
-                    sendEmail();
-                }
-                */
                 return true;
             case R.id.radius:
                 openRadiusDialog(ctx);
@@ -918,28 +931,15 @@ public class MainActivity extends /*Activity*/AppCompatActivity {
         }
     }
 
-    /*
-    public void sendEmail(){
-        String subject = "Your Ship is out of Range!";
-        String mailTo = "mailto:" + sendTo +
-                "?&subject=" + Uri.encode(subject) +
-                "&body=" + Uri.encode(emailBody);
-        Intent emailIntent = new Intent(Intent.ACTION_SENDTO);
-        emailIntent.setType("message/rfc822");
-        emailIntent.setData(Uri.parse(mailTo));
-        startActivity(emailIntent);
-    }
-    */
-
     /**
      * @brief This function starts an AsyncTask for sending an email to an given mail address.
      */
     public  void sendEmail(){
         TextView text = new TextView(ctx);
-        text.setText("http://www.openstreetmap.org/?mlat=" + actualGeoPoint.getLatitude() + "&mlon=" + actualGeoPoint.getLongitude()+"&zoom=14&layers=M");
+        text.setText("http://www.openstreetmap.org/?mlat=" + actualGeoPoint.getLatitude() + "&mlon=" + actualGeoPoint.getLongitude()+"&zoom=14&layers=M");  //create link with location
         Linkify.addLinks(text,Linkify.WEB_URLS);
-        Mail m = new Mail(ctx,sendTo,"Your Ship Is Out Of Range!",emailBody + "\n" + text.getText());
-        m.execute();
+        Mail m = new Mail(ctx,sendTo,"Your Ship Is Out Of Range!",emailBody + "\n" + text.getText());   //send mail
+        m.execute();    //start Async Task
     }
 
 }
